@@ -1,0 +1,80 @@
+#!/usr/bin/ruby 
+require 'optparse'
+
+options = {
+	:samplefile => nil
+}
+
+OptionParser.new do |opts|
+	opts.on( '-h', '--help', 'Display this screen' ) do
+		puts opts
+		exit
+	end
+
+	opts.on("-c", "--chr chrom", "chromosome") do |chrom|
+		options[:chr] = chrom
+	end 
+
+	opts.on("-s", "--sample-file file","Sample file") do |file|
+		options[:samplefile] = file
+	end
+
+	opts.on("-g", "--gen-file file", ".gen file") do |file|
+		options[:genfile] = file
+	end
+
+	opts.on("-v", "--vcf-file file", ".vcf output file") do |file|
+		options[:vcf_file] = file	
+	end
+end.parse!
+
+puts options 
+
+# Read sample file:
+samples = [] 
+File.open(options[:samplefile]) do |file|
+	file.each do |line|
+		samples << line.chomp.split(" ").first
+	end
+end
+
+header = [ 
+'##fileformat=VCFv4.1',
+'##INFO=<ID=PSEUDO,Number=0,Type=Flag,Description="A dummy flag">',
+'##FORMAT=<ID=GL,Number=.,Type=Float,Description="Genotype Likelihoods">'
+].join("\n")
+
+out = File.open(options[:vcf_file], "w")
+
+out.puts(header)
+
+File.open(options[:genfile]) do |file|
+	file.each do |line|
+		vcfline = []
+		fields = line.chomp.split(" ")
+		vcfline << options[:chr]	# CHR
+		vcfline << fields[2] 		# POS 
+		vcfline << fields[1]		# ID
+		vcfline << fields[3]		# REF allele 
+		vcfline << fields[4]		# ALT allele 
+		vcfline << 100			# QUAL (pseudo)
+		vcfline << "PASS"		# FILTER (pseudo)
+		vcfline << "PSEUDO=1"		# INFO (we do not use for anything)
+		vcfline << "GL"			# FORMAT 
+		likelihoods = []
+		5.upto(fields.size-1) do |i|
+			checkpoint = 7 % 3
+			if i % 3 == checkpoint then
+				vcfline << likelihoods.join(":")		
+				likelihoods = []
+			else
+				# Genotype likelihoods are required to be log10 scaled in VCF 
+				likelihoods << Math.log10(fields[i]) 
+			end
+		end
+		out.puts(vcfline.join("\t"))
+	end
+end
+
+out.close
+
