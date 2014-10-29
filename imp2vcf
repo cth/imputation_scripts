@@ -2,7 +2,8 @@
 require 'optparse'
 
 options = {
-	:samplefile => nil
+	:samplefile => nil,
+	:dosage => false
 }
 
 OptionParser.new do |opts|
@@ -26,6 +27,10 @@ OptionParser.new do |opts|
 	opts.on("-v", "--vcf-file file", ".vcf output file") do |file|
 		options[:vcf_file] = file	
 	end
+
+	opts.on("-d", "--dosage", "Use dosage genotypes rather than genotype likelihoods as provided by IMPUTE2") do 
+		options[:dosage] = true
+	end
 end.parse!
 
 puts options 
@@ -33,7 +38,10 @@ puts options
 # Read sample file:
 samples = [] 
 File.open(options[:samplefile]) do |file|
+	lineno=0
 	file.each do |line|
+		lineno = lineno + 1
+		next if lineno == 1
 		samples << line.chomp.split(" ").first
 	end
 end
@@ -48,11 +56,34 @@ out = File.open(options[:vcf_file], "w")
 
 out.puts(header)
 
+fields = [
+"#CHROM",
+"POS",
+"ID",
+"REF",
+"ALT",
+"QUAL",
+"FILTER",
+"INFO",
+"FORMAT",
+] + samples 
+
+
+# The Dosage represents the predicted dosage of the non reference allele given the data available, 
+# it will always have a value between 0 and 2.
+# The formula is Dosage = Pr(Het|Data) + 2*Pr(Alt|Data)
+# See, http://www.1000genomes.org/faq/what-does-genotype-dosage-mean-phase1-integrated-call-set
+def genotype_likelihoods_to_dosage(p_aa, p_ab, p_bb)
+	p_bb * 2 + p_ab
+end
+
+out.puts(fields.join("\t"))
+
 File.open(options[:genfile]) do |file|
 	file.each do |line|
 		vcfline = []
 		fields = line.chomp.split(" ")
-		vcfline << options[:chr]	# CHR
+		vcfline << options[:chr] || fields[0]	# CHR
 		vcfline << fields[2] 		# POS 
 		vcfline << fields[1]		# ID
 		vcfline << fields[3]		# REF allele 
@@ -60,16 +91,35 @@ File.open(options[:genfile]) do |file|
 		vcfline << 100			# QUAL (pseudo)
 		vcfline << "PASS"		# FILTER (pseudo)
 		vcfline << "PSEUDO=1"		# INFO (we do not use for anything)
-		vcfline << "GL"			# FORMAT 
+		if options[:dosage] then
+			vcfline << "DS"
+		else
+			vcfline << "GL"			# FORMAT 
+		end
 		likelihoods = []
 		5.upto(fields.size-1) do |i|
 			checkpoint = 7 % 3
+			# Genotype likelihoods are required to be log10 scaled in VCF 
+			if options[:dosage] then
+				likelihoods << fields[i].to_f
+			else 
+				if fields[i].to_f == 0 then
+					likelihoods << -100.0 # Suffiently small, but not -infinity
+				else
+					likelihoods << Math.log10(fields[i].to_f) 
+				end
+			end
+
 			if i % 3 == checkpoint then
-				vcfline << likelihoods.join(":")		
+				if options[:dosage] then
+					dosage = genotype_likelihoods_to_dosage(*likelihoods)
+					#puts likelihoods.inspect + " => " +  dosage.to_s
+					genotype_likelihoods_to_dosage(*likelihoods)
+					vcfline << dosage 
+				else
+					vcfline << likelihoods.join(",")		
+				end
 				likelihoods = []
-			else
-				# Genotype likelihoods are required to be log10 scaled in VCF 
-				likelihoods << Math.log10(fields[i]) 
 			end
 		end
 		out.puts(vcfline.join("\t"))
@@ -77,4 +127,3 @@ File.open(options[:genfile]) do |file|
 end
 
 out.close
-
