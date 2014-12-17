@@ -3,7 +3,8 @@ require 'optparse'
 
 options = {
 	:samplefile => nil,
-	:dosage => false
+	:dosage => false,
+	:threshold => false 
 }
 
 OptionParser.new do |opts|
@@ -31,9 +32,15 @@ OptionParser.new do |opts|
 	opts.on("-d", "--dosage", "Use dosage genotypes rather than genotype likelihoods as provided by IMPUTE2") do 
 		options[:dosage] = true
 	end
+
+	opts.on("-t", "--threshold n", "Threshold likelihood to get genotype predictions" ) do |n|
+		options[:threshold] = n
+	end
 end.parse!
 
 puts options 
+
+throw "Cannot do both dosage and threshold!" if options[:dosage] and options[:threshold]
 
 # Read sample file:
 samples = [] 
@@ -93,6 +100,8 @@ File.open(options[:genfile]) do |file|
 		vcfline << "PSEUDO=1"		# INFO (we do not use for anything)
 		if options[:dosage] then
 			vcfline << "DS"
+		elsif options[:threshold] then
+			vcfline << "GT"
 		else
 			vcfline << "GL"			# FORMAT 
 		end
@@ -100,7 +109,7 @@ File.open(options[:genfile]) do |file|
 		5.upto(fields.size-1) do |i|
 			checkpoint = 7 % 3
 			# Genotype likelihoods are required to be log10 scaled in VCF 
-			if options[:dosage] then
+			if options[:dosage] or options[:threshold] then
 				likelihoods << fields[i].to_f
 			else 
 				if fields[i].to_f == 0 then
@@ -113,11 +122,32 @@ File.open(options[:genfile]) do |file|
 			if i % 3 == checkpoint then
 				if options[:dosage] then
 					dosage = genotype_likelihoods_to_dosage(*likelihoods)
-					#puts likelihoods.inspect + " => " +  dosage.to_s
 					genotype_likelihoods_to_dosage(*likelihoods)
 					vcfline << dosage 
+				elsif options[:threshold] then
+					max_l = 0
+					max_i = nil
+					likelihoods.each_with_index do |l,i|
+						if l > max_l then
+							max_l = l
+							max_i = i
+						end
+					end
+
+					if max_l > options[:threshold].to_f then
+						case max_i
+							when 0
+								vcfline << "0/0"
+							when 1
+								vcfline << "0/1"
+							when 2
+								vcfline << "1/1"
+						end	
+					else
+						vcfline << "."
+					end
 				else
-					vcfline << likelihoods.join(",")		
+					vcfline << likelihoods.join(",")
 				end
 				likelihoods = []
 			end
