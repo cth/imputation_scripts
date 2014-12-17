@@ -1,29 +1,43 @@
+#!/bin/bash 
+set -x 
+
 plink=plink19
 
 # make folders:
+mkdir -p plink
 mkdir -p phasing/unphased
 mkdir -p phasing/phased
 mkdir -p sge
 mkdir -p imputed
 
-# This file is assumed to be on TOP!
-INPUT_PLINK=/eva/data/clean/target/chip_data/Target_and_GBparents_clean_V1
+i=1
+for plinkstem in `cat input_files.txt` # These file is assumed to be on TOP!
+do
+	pname=`basename $plinkstem`
 
-# QC filters:
-$plink --noweb --bfile $INPUT_PLINK --maf 0.01 --geno 0.05 --hwe 0.0001 --make-bed --out plink/hwe10e_maf001_geno005
+	# update to build37 plus strand  
+	bash scripts/update_build.sh "$plinkstem"  additional_files/HumanCoreExome-12v1-0_B-b37.strand "plink/$pname.strandupdated"
 
-# remove gastric bypass parents:
-$plink --bfile plink/hwe10e_maf001_geno005 --remove <( cat plink/hwe10e_maf001_geno005.fam|awk '{print $1,$2}'|grep "GB") --make-bed --out plink/hwe10e_maf001_geno005_nogastric_par
+	$plink --bfile plink/$pname.strandupdated --maf 0.01 --geno 0.05 --make-bed --out plink/$pname.maf001_geno005
 
-# update to build37 plus strand  
-bash scripts/update_build.sh plink/hwe10e_maf001_geno005_nogastric_par  additional_files/HumanCoreExome-12v1-0_B-b37.strand plink/strandupdated 
+	if [ $i -eq 1 ]; then
+		LATEST=$pname.maf001_geno005
+	else	
+		plink19 --bfile plink/$pname.maf001_geno005 --bmerge plink/$LATEST.bed plink/$LATEST.bim plink/$LATEST.fam --out plink/merge.$i 
+		LATEST=merge.$i
+	fi
+	i=$(($i+1))
+done
+
+# HWE pruning 
+$plink --bfile plink/$LATEST --hwe 0.0001 --make-bed --out plink/all_hwe10e_maf001_geno005
 
 # Divide by chromosome
 for i in `seq 1 23`
 do
 	echo "#!/bin/bash" > sge/chrsplit.$i.sge
 	echo "#$ -S /bin/bash"  >> sge/chrsplit.$i.sge
-	echo "$plink --bfile plink/strandupdated --chr $i --make-bed --out phasing/unphased/chr$i"  >> sge/chrsplit.$i.sge
+	echo "$plink --bfile plink/all_hwe10e_maf001_geno005 --chr $i --make-bed --out phasing/unphased/chr$i"  >> sge/chrsplit.$i.sge
 	qsub -N chrspl$i  -cwd sge/chrsplit.$i.sge
 done
 
