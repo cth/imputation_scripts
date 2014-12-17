@@ -9,4 +9,3 @@ require_relative 'chunking.rb'
 		`zcat imputed/chr#{chr}-chunk-#{chunk_start}-#{chunk_end}.impute.gz >> all_1_22.impute`
 	end
 end
-

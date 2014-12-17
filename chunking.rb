@@ -1,5 +1,5 @@
 module Chunking
-	@@genetic_map_dir="ALL_1000G_phase1integrated_v3_impute"
+	@@genetic_map_dir="map" #ALL_1000G_phase1integrated_v3_impute"
 	#@@genetic_map_dir="../ALL.integrated_phase1_v3.20101123.snps_indels_svs.genotypes.nomono"
 	@@panel_dir=@@genetic_map_dir
 	@@phased_dir="phasing/phased"
