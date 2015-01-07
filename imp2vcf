@@ -139,7 +139,16 @@ end
 
 out.puts(fields.join("\t"))
 
-File.open(options[:genfile]) do |file|
+if /^.*gz$/.match(options[:genfile]) then
+	require 'zlib'
+	opener = Zlib::GzipReader 
+else
+	opener = File 
+end
+
+puts opener.inspect
+
+opener.open(options[:genfile]) do |file|
 	file.each do |line|
 		vcfline = []
 		fields = line.chomp.split(" ")
