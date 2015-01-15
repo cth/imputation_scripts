@@ -9,6 +9,7 @@ mkdir -p phasing/unphased
 mkdir -p phasing/phased
 mkdir -p sge
 mkdir -p imputed
+mkdir -o VCFs
 
 i=1
 for plinkstem in `cat input_files.txt` # These file is assumed to be on TOP!
@@ -71,5 +72,26 @@ do
 	for script in sge/impute-chr.$chr.*
 	do
 		qsub -hold_jid x.phase$chr $script
+	done
+done
+
+for impsge in sge/impute-chr*sge
+do
+	for inputplink in `cat input_files.txt`
+	do
+		chunkbase=`basename $impsge|cut -d'-' -f2-3|cut -d'.' -f1-3`
+		inputbase=`basename $inputplink`
+		chr=`echo $chunkbase|cut -d'.' -f2`
+		chunkstart=`echo $chunkbase|cut -d'.' -f3|cut -d'-' -f1` 
+		script=sge/vcf.$inputbase.$chunkbase.sge
+		echo $script
+		echo "#!/bin/bash" > $script 
+		echo "#$ -S /bin/bash"  >> $script
+		echo "#$ -N x.imp2vcf.$inputbase.$chunkbase" >> $script 
+		echo "#$ -cwd" >>  $script 
+		echo "scripts/imp2vcf -c $chr -g $(pwd)/$chunk -s "tmp/plink.sample" -k $inputplink.fam -v $(pwd)/VCFs/$inputbase.$chunkbase.vcf -l -d -t 0.99" >> $script
+		echo "bgzip $(pwd)/VCFs/$inputbase.$chunkbase.vcf" >> $script
+		echo "tabix -p vcf $(pwd)/VCFs/$inputbase.$chunkbase.vcf.gz" >> $script
+		qsub -hold_jid x.imp$chr-$script-$chunkstart $script
 	done
 done
