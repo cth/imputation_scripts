@@ -9,7 +9,7 @@ mkdir -p phasing/unphased
 mkdir -p phasing/phased
 mkdir -p sge
 mkdir -p imputed
-mkdir -o VCFs
+mkdir -p VCFs
 
 i=1
 for plinkstem in `cat input_files.txt` # These file is assumed to be on TOP!
