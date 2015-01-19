@@ -1,9 +1,12 @@
-#!/usr/bin/ruby 
+#!/home/fng514/bin/ruby
 require 'optparse'
+require 'set'
+require 'pp'
 
 options = {
 	:samplefile => nil,
-	:dosage => false
+	:dosage => false,
+	:threshold => false 
 }
 
 OptionParser.new do |opts|
@@ -20,6 +23,10 @@ OptionParser.new do |opts|
 		options[:samplefile] = file
 	end
 
+	opts.on("-k", "--keep file", "A file with samples to keep in VCF. One per line.") do |file|
+		options[:keepfile] = file
+	end
+
 	opts.on("-g", "--gen-file file", ".gen file") do |file|
 		options[:genfile] = file
 	end
@@ -28,23 +35,64 @@ OptionParser.new do |opts|
 		options[:vcf_file] = file	
 	end
 
+	opts.on("-l", "--likelihood", "Use genotype likelihoods as provided by IMPUTE2") do 
+		options[:likelihood] = true
+	end
+
 	opts.on("-d", "--dosage", "Use dosage genotypes rather than genotype likelihoods as provided by IMPUTE2") do 
 		options[:dosage] = true
 	end
+
+	opts.on("-t", "--threshold n", "Threshold likelihoods to infer genotype predictions" ) do |n|
+		options[:threshold] = n
+	end
 end.parse!
 
-puts options 
+puts "Selected options"
+pp options
+
+#throw "Cannot do both dosage and threshold!" if options[:dosage] and options[:threshold]
 
 # Read sample file:
 samples = [] 
+lineno=0
 File.open(options[:samplefile]) do |file|
-	lineno=0
 	file.each do |line|
 		lineno = lineno + 1
 		next if lineno == 1
 		samples << line.chomp.split(" ").first
 	end
 end
+
+puts "Read #{lineno-1} samples from #{options[:samplefile]}"
+
+skip_samples = []
+keep_samples = []
+
+if options[:keepfile] then
+	File.open(options[:keepfile]) do |file|
+		file.each do |line|
+			keep_samples << line.chomp.split(" ").first
+		end
+	end
+
+	keep_samples_set = keep_samples.to_set
+	keep_samples = []
+	
+	0.upto(samples.length-1) do |i| 
+		if keep_samples_set.include?(samples[i])
+			keep_samples << samples[i] 
+			skip_samples[i] = false 
+		else
+			skip_samples[i] = true
+		end
+	end
+else
+	0.upto(samples.length-1) { |i| skip_samples[i] = false } 
+	keep_samples = samples
+end
+
+puts "Keeping #{keep_samples.size}/#{lineno-1} samples"
 
 header = [ 
 '##fileformat=VCFv4.1',
@@ -56,17 +104,7 @@ out = File.open(options[:vcf_file], "w")
 
 out.puts(header)
 
-fields = [
-"#CHROM",
-"POS",
-"ID",
-"REF",
-"ALT",
-"QUAL",
-"FILTER",
-"INFO",
-"FORMAT",
-] + samples 
+fields = [ "#CHROM","POS","ID","REF","ALT","QUAL","FILTER","INFO","FORMAT"] + keep_samples 
 
 
 # The Dosage represents the predicted dosage of the non reference allele given the data available, 
@@ -77,9 +115,40 @@ def genotype_likelihoods_to_dosage(p_aa, p_ab, p_bb)
 	p_bb * 2 + p_ab
 end
 
+def threshold_likelihoods(likelihoods,threshold)
+	threshold_genotype = [ "0/0", "0/1", "1/1" ] 
+	max_l = 0
+	max_i = nil
+	likelihoods.each_with_index do |l,i|
+		if l > max_l then
+			max_l = l
+			max_i = i
+		end
+	end
+
+	if max_l > threshold then
+		threshold_genotype[max_i]
+	else
+		"."
+	end
+end
+
+def log_likelihoods(likelihoods)
+	likelihoods.map { |l|  l.to_f == 0 ? -100 : Math.log10(l.to_f) }
+end
+
 out.puts(fields.join("\t"))
 
-File.open(options[:genfile]) do |file|
+if /^.*gz$/.match(options[:genfile]) then
+	require 'zlib'
+	opener = Zlib::GzipReader 
+else
+	opener = File 
+end
+
+puts opener.inspect
+
+opener.open(options[:genfile]) do |file|
 	file.each do |line|
 		vcfline = []
 		fields = line.chomp.split(" ")
@@ -91,34 +160,38 @@ File.open(options[:genfile]) do |file|
 		vcfline << 100			# QUAL (pseudo)
 		vcfline << "PASS"		# FILTER (pseudo)
 		vcfline << "PSEUDO=1"		# INFO (we do not use for anything)
-		if options[:dosage] then
-			vcfline << "DS"
-		else
-			vcfline << "GL"			# FORMAT 
-		end
+
+		vcfline << [ options[:threshold],options[:dosage],options[:likelihood] ].
+				zip(["GT","DS", "GL"]).
+				collect {|the| the.last if the.first }.
+				compact.
+				join(":") 
+
 		likelihoods = []
+		dosages = []
+		genotypes = [] 
 		5.upto(fields.size-1) do |i|
+			next if skip_samples[((i+1)/3)-2]
+
 			checkpoint = 7 % 3
 			# Genotype likelihoods are required to be log10 scaled in VCF 
-			if options[:dosage] then
-				likelihoods << fields[i].to_f
-			else 
-				if fields[i].to_f == 0 then
-					likelihoods << -100.0 # Suffiently small, but not -infinity
-				else
-					likelihoods << Math.log10(fields[i].to_f) 
-				end
-			end
-
+			likelihoods << fields[i].to_f
+			
 			if i % 3 == checkpoint then
-				if options[:dosage] then
-					dosage = genotype_likelihoods_to_dosage(*likelihoods)
-					#puts likelihoods.inspect + " => " +  dosage.to_s
-					genotype_likelihoods_to_dosage(*likelihoods)
-					vcfline << dosage 
-				else
-					vcfline << likelihoods.join(",")		
-				end
+				vcfline << [:threshold,:dosage,:likelihood].collect { |type|
+					##puts options[:type]
+					if options[type] then
+						case type
+						when :threshold
+							threshold_likelihoods(likelihoods,options[:threshold].to_f)
+						when :dosage
+							genotype_likelihoods_to_dosage(*likelihoods)
+						when :likelihood
+							log_likelihoods(likelihoods).join(",")
+						end 
+					end 
+				}.compact.join(":")
+				#puts "-> #{vcfline.to_s}"
 				likelihoods = []
 			end
 		end
