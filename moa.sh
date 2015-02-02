@@ -13,12 +13,26 @@ mkdir -p sge
 mkdir -p imputed
 mkdir -p VCFs
 
-function qsubid { qsub $1 | cut -d" " -f3 } 
-function waitqid { while [ 1 -eq `qstat -f|grep -w $1|wc|awk '{print $1}'` ]; do sleep 1; done }
+#CHIP_STRAND_FILE=additional_files/HumanCoreExome-12v1-0_B-b37.strand
+CHIP_STRAND_FILE=additional_files/Metabochip-b37.58-v2.strand
+
+function qsubid { 
+	qsub -cwd $@ | cut -d" " -f3 
+} 
+
+function waitqid { 
+	while [ 1 -eq `qstat -f|grep -w $1|wc|awk '{print $1}'` ]
+	do 
+		echo "waiting for $1 to finish"
+		qstat -f | grep -C 5 -w $1
+		sleep 5 
+	done 
+}
 
 i=1
 for plinkstem in `cat input_files.txt` # These file is assumed to be on TOP!
 do
+	echo $plinkstem
 	pname=`basename $plinkstem`
 	script=sge/plinkqc.$pname.sge
 	echo "#!/bin/bash" > $script
@@ -27,8 +41,8 @@ do
 	echo "$ -l mem_free=1G" >> $script
 
 	# update to build37 plus strand  
-	echo "bash scripts/update_build.sh \"$plinkstem\"  additional_files/HumanCoreExome-12v1-0_B-b37.strand \"plink/$pname.strandupdated\"" >> $script 
-	echo "$plink --bfile plink/$pname.strandupdated --maf 0.01 --geno 0.05 --make-bed --out plink/$pname.maf001_geno005" >> $script
+	echo "bash scripts/update_build.sh \"$plinkstem\"  $CHIP_STRAND_FILE \"plink/$pname.strandupdated\"" >> $script 
+	echo "$plink --bfile plink/$pname.strandupdated --maf 0.01 --mind 0.05 --geno 0.05 --make-bed --out plink/$pname.maf001_geno005" >> $script
 
 	if [ $i -eq 1 ]; then
 		LATEST=$pname.maf001_geno005
@@ -48,9 +62,8 @@ echo "#!/bin/bash" > $script
 echo "#$ -S /bin/bash"  >> $script 
 echo "$ -cwd" >> $script
 echo "$ -l mem_free=1G" >> $script
-echo "$plink --bfile plink/$LATEST --hwe 0.0001 --make-bed --out plink/all_hwe10e_maf001_geno005" > $script
+echo "$plink --bfile plink/$LATEST --hwe 0.000001 --make-bed --out plink/all_hwe10e_maf001_geno005" >> $script
 LATEST_QID=`qsubid -hold_jid $LATEST_QID $script`
-
 
 # Divide by chromosome
 for i in `seq 1 23`
@@ -91,12 +104,16 @@ done
 script=sge/chunking.sge
 echo "#!/bin/bash" > $script 
 echo "#$ -S /bin/bash"  >> $script 
-echo "#$ -N x.chunk" >> $scri
-echo "ruby scripts/chunked_imputation.rb"
-echo "tail -n+3 phasing/phased/chr1.phased.sample > all.sample"
+echo "#$ -N x.chunk" >> $script
+echo "ruby scripts/chunked_imputation.rb" >> $script
+echo "tail -n+3 phasing/phased/chr1.phased.sample > all.sample" >> $script
 chunking_qid=`qsubid -hold_jid $phasing_ids $script`
 
 # Here we need chunking to finish before proceeding
+
+waitqid $chunking_qid
+
+
 
 for chr in `seq 1 23` 
 do
