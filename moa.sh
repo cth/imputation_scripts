@@ -13,8 +13,8 @@ mkdir -p sge
 mkdir -p imputed
 mkdir -p VCFs
 
-#CHIP_STRAND_FILE=additional_files/HumanCoreExome-12v1-0_B-b37.strand
-CHIP_STRAND_FILE=additional_files/Metabochip-b37.58-v2.strand
+CHIP_STRAND_FILE=additional_files/HumanCoreExome-12v1-0_B-b37.strand
+#CHIP_STRAND_FILE=additional_files/Metabochip-b37.58-v2.strand
 
 function qsubid { 
 	qsub -cwd $@ | cut -d" " -f3 
@@ -38,7 +38,6 @@ do
 	echo "#!/bin/bash" > $script
 	echo "#$ -S /bin/bash"  >> $script 
 	echo "$ -cwd" >> $script
-	echo "$ -l mem_free=1G" >> $script
 
 	# update to build37 plus strand  
 	echo "bash scripts/update_build.sh \"$plinkstem\"  $CHIP_STRAND_FILE \"plink/$pname.strandupdated\"" >> $script 
@@ -52,7 +51,6 @@ do
 		LATEST=merge.$i
 		LATEST_QID=`qsubid -hold_jid $LATEST_QID $script`
 	fi
-	LATEST_QID=`qsubid $script`
 	i=$(($i+1))
 done
 
@@ -61,7 +59,6 @@ script="sge/hweprune.sge"
 echo "#!/bin/bash" > $script
 echo "#$ -S /bin/bash"  >> $script 
 echo "$ -cwd" >> $script
-echo "$ -l mem_free=1G" >> $script
 echo "$plink --bfile plink/$LATEST --hwe 0.000001 --make-bed --out plink/all_hwe10e_maf001_geno005" >> $script
 LATEST_QID=`qsubid -hold_jid $LATEST_QID $script`
 
@@ -112,8 +109,6 @@ chunking_qid=`qsubid -hold_jid $phasing_ids $script`
 # Here we need chunking to finish before proceeding
 
 waitqid $chunking_qid
-
-
 
 for chr in `seq 1 23` 
 do
