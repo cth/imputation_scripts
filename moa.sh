@@ -118,7 +118,6 @@ do
 	done
 done
 
-
 for impsge in sge/impute-chr*sge
 do
 	for inputplink in `cat input_files.txt`
@@ -126,14 +125,16 @@ do
 		chunkbase=`basename $impsge|cut -d'-' -f2-3|cut -d'.' -f1-3`
 		inputbase=`basename $inputplink`
 		chr=`echo $chunkbase|cut -d'.' -f2`
+		chunkrange=`echo $chunkbase|cut -d'.' -f3`
 		chunkstart=`echo $chunkbase|cut -d'.' -f3|cut -d'-' -f1` 
 		script=sge/vcf.$inputbase.$chunkbase.sge
+		genofile=$(pwd)/imputed/chr$chr-chunk-$chunkrange.impute.gz
 		echo $script
 		echo "#!/bin/bash" > $script 
 		echo "#$ -S /bin/bash"  >> $script
 		echo "#$ -N x.imp2vcf.$inputbase.$chunkbase" >> $script 
 		echo "#$ -cwd" >>  $script 
-		echo "scripts/imp2vcf -c $chr -g $(pwd)/$chunk -s all.sample -k $inputplink.fam -v $(pwd)/VCFs/$inputbase.$chunkbase.vcf -l -d -t 0.99" >> $script
+		echo "scripts/imp2vcf -c $chr -g $genofile -s all.sample -k $inputplink.fam -v $(pwd)/VCFs/$inputbase.$chunkbase.vcf -l -d -t 0.99" >> $script
 		echo "bgzip $(pwd)/VCFs/$inputbase.$chunkbase.vcf" >> $script
 		echo "tabix -p vcf $(pwd)/VCFs/$inputbase.$chunkbase.vcf.gz" >> $script
 		qsub -hold_jid x.imp$chr-$script-$chunkstart $script

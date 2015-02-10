@@ -34,7 +34,7 @@ File.open("input_files.txt") do |file|
 			line=1
 
 			Chunking::infer_chunks(chr).each do |_,chunk_start,chunk_end|
-				chunk_file="VCFs/#{cohort_name}.chr#{chr}-chunk-#{chunk_start}-#{chunk_end}.impute.gz.vcf.gz"
+				chunk_file="VCFs/#{cohort_name}.chr.#{chr}.#{chunk_start}-#{chunk_end}.vcf.gz"
 				next unless File.exists?(chunk_file)
 
 				if line == 1 then 
