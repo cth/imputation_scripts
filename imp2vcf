@@ -1,76 +1,53 @@
 #!/home/fng514/bin/ruby
-require 'optparse'
-require 'set'
 require 'pp'
+require 'set'
 require 'zlib'
-
-options = {
-	:samplefile => nil,
-	:dosage => false,
-	:threshold => false 
-}
-
-OptionParser.new do |opts|
-	opts.on( '-h', '--help', 'Display this screen' ) do
-		puts opts
-		exit
-	end
-
-	opts.on("-c", "--chr chrom", "chromosome") do |chrom|
-		options[:chr] = chrom
-	end 
-
-	# Input files
-	opts.on("-s", "--sample-file file","Sample file") do |file|
-		options[:samplefile] = file
-	end
-
-	opts.on("-g", "--gen-file file", ".gen file") do |file|
-		options[:genfile] = file
-	end
-
-	opts.on("-D", "--dose file", "MaCH dose file.") do |file| 
-		options[:machdose] = file	
-	end
-
-	opts.on("-I", "--info file", "MaCH info file.") do |file|
-		options[:machinfo] = file
-	end
-
-	opts.on("-k", "--keep file", "A file with samples to keep in VCF. One per line.") do |file|
-		options[:keepfile] = file
-	end
-
-	# Output file
-	opts.on("-v", "--vcf-file file", ".vcf output file") do |file|
-		options[:vcf_file] = file	
-	end
-
-	# Output fields
-	opts.on("-l", "--likelihood", "Use genotype likelihoods as provided by IMPUTE2") do 
-		options[:likelihood] = true
-	end
-
-	opts.on("-d", "--dosage", "Use dosage genotypes rather than genotype likelihoods as provided by IMPUTE2") do 
-		options[:dosage] = true
-	end
-
-	opts.on("-t", "--threshold n", "Threshold likelihoods to infer genotype predictions" ) do |n|
-		options[:threshold] = n
-	end
-end.parse!
+require 'thread'
+require 'optparse'
+require 'filesize'
+require 'distribution'
+$stdout.sync = true
 
 def open_maybe_compressed(file)
 		dose_file_reader =  (/^.*gz$/.match(@options[:dosefile]) ?  Zlib::GzipReader : File).open(file)
 end
-
-
 
 class AssertionError < RuntimeError
 end
 
 def assert &block
     raise AssertionError unless yield
+end
+
+# MemoryUsageMonitor from: http://zogovic.com/post/59091704817/memory-usage-monitor-in-ruby
+class MemoryUsageMonitor
+  attr_reader :peak_memory
+
+  def initialize(frequency)
+    puts "Memory monitor initialized at a frequency #{frequency} seconds"
+    @frequency = frequency.to_i
+    @peak_memory = 0
+    @thread = Thread.new do
+      while true do
+        memory = `ps -o rss -p #{Process::pid}`.chomp.split("\n").last.strip.to_i
+        @peak_memory =[memory, @peak_memory].max
+	puts "Current memory #{Filesize.from(memory.to_s + " KB").pretty}. Peak memory #{Filesize.from(@peak_memory.to_s + " KB").pretty}."
+        sleep @frequency
+      end
+    end
+  end
+  
+  def stop
+    Thread.kill(@thread)
+  end
+end
+
+def gzfile?(file)
+	if /^.*gz$/.match(file)  
+		Zlib::GzipReader 
+	else
+		File
+	end
 end
 
 class BufferedFileOutput
@@ -96,7 +73,6 @@ class BufferedFileOutput
 	end
 end 
 
-
 # The Dosage represents the predicted dosage of the non reference allele given the data available, 
 # it will always have a value between 0 and 2.
 # The formula is Dosage = Pr(Het|Data) + 2*Pr(Alt|Data)
@@ -111,13 +87,15 @@ def dosage_to_genotype(dosage)
 	min_delta = 2
 	min_index = nil
 	delta_dosage012.each_with_index do |delta,index|
-		if delta > min_delta then
+		if delta < min_delta then
 			min_delta = delta
 			min_index = index
 		end
 	end
 
-	genotypes[max_index]
+	assert { !min_index.nil? }
+
+	genotypes012[min_index]
 end
 
 def threshold_likelihoods(likelihoods,threshold)
@@ -141,6 +119,13 @@ end
 # Genotype likelihoods are required to be log10 scaled in VCF 
 def log_likelihoods(likelihoods)
 	likelihoods.map { |l|  l.to_f == 0 ? -100 : Math.log10(l.to_f) }
+end
+
+def dosage_to_likelihoods(dosage)
+	deltas = [ dosage,  (dosage - 1).abs, (dosage - 2).abs ]
+	pdfs = deltas.collect { |d|  Distribution::Beta.pdf(d,1,2) }
+	sum_pdfs = pdfs.inject { |a,b| a+b  }
+	pdfs.collect { |p| p / sum_pdfs } # normalize
 end
 
 class VCF
@@ -175,18 +160,18 @@ class VCF
 
 
 	def write
-			puts "Attempting to write #{@options[:vcf_file]}"
-			@vcfout = File.open(@options[:vcf_file], "w")
-			@vcfout.puts(header)
+		puts "Attempting to write #{@options[:vcf_file]}"
+		@vcfout = File.open(@options[:vcf_file], "w")
+		@vcfout.puts(header)
 
-			# MaCh-mode
-			if @options[:machdose] and @options[:machinfo] then # mach mode
-				from_mach # writes to @vcfout
-			elsif @options[:samplefile] and @options[:genfile] then  # impute2 mode
-				impute2_to_vcf # write to @vcfout
-			end
+		# MaCh-mode
+		if @options[:machdose] and @options[:machinfo] then # mach mode
+			from_mach # writes to @vcfout
+		elsif @options[:samplefile] and @options[:genfile] then  # impute2 mode
+			impute2_to_vcf # write to @vcfout
+		end
 
-			@vcfout.close
+		@vcfout.close
 	end
 
 	def sample_fields_format
@@ -229,9 +214,11 @@ class VCF
 		puts "Extracted #{vcflines.size} variants from info file (#{@options[:machinfo]})"
 
 		samples = []
-		(/^.*gz$/.match(@options[:dosefile]) ?  Zlib::GzipReader : File).open(@options[:machdose]) do |file|
+
+		gzfile?(@options[:machdose]).open(@options[:machdose]) do |file|
 			file.each_with_index do |line,idx|
 				fields = line.chomp.split(" ")
+				puts [fields.size, vcflines.size ].inspect
 				assert { fields.size-2 == vcflines.size } 
 
 				#next unless  (@options[:keepfile] and keep_samples_set.include?(fields[0])) or !@options[:keepfile]
@@ -240,14 +227,15 @@ class VCF
 
 				2.upto(fields.size-1) do |snp_idx|
 					vcflines[snp_idx-2] << [:threshold,:dosage,:likelihood].collect do |type|
+						dosage = fields[snp_idx].to_f
 						if @options[type] then
 							case type
 							when :threshold
-								dosage_to_genotype(fields[snp_idx])
+								threshold_likelihoods(dosage_to_likelihoods(dosage),@options[:threshold])
 							when :dosage
-								fields[snp_idx]
+								dosage
 							when :likelihood
-								likelihoods_from_dosage(fields[snp_idx])
+								log_likelihoods(dosage_to_likelihoods(dosage)).join(",")
 							end 
 						end
 					end.compact.join(":")
@@ -360,32 +348,84 @@ class VCF
 
 end
 
-puts "Selected options"
+##################################### main ###################################
+
+options = {
+	:samplefile => nil,
+	:dosage => false,
+	:threshold => false 
+}
+
+OptionParser.new do |opts|
+	opts.on( '-h', '--help', 'Display this screen' ) do
+		puts opts
+		exit
+	end
+
+	opts.on("-c", "--chr chrom", "chromosome") do |chrom|
+		options[:chr] = chrom
+	end 
+
+	# Input files
+	opts.on("-S", "--sample-file file","Sample file") do |file|
+		options[:samplefile] = file
+	end
+
+	opts.on("-G", "--gen-file file", ".gen file") do |file|
+		options[:genfile] = file
+	end
+
+	opts.on("-D", "--dose file", "MaCH dose file.") do |file| 
+		options[:machdose] = file	
+	end
+
+	opts.on("-I", "--info file", "MaCH info file.") do |file|
+		options[:machinfo] = file
+	end
+
+	opts.on("-K", "--keep file", "A file with samples to keep in VCF. One per line.") do |file|
+		options[:keepfile] = file
+	end
+
+	# Output file
+	opts.on("-V", "--vcf-file file", ".vcf output file") do |file|
+		options[:vcf_file] = file	
+	end
+
+	# Output fields
+	opts.on("-l", "--likelihood", "Use genotype likelihoods as provided by IMPUTE2") do 
+		options[:likelihood] = true
+	end
+
+	opts.on("-d", "--dosage", "Use dosage genotypes rather than genotype likelihoods as provided by IMPUTE2") do 
+		options[:dosage] = true
+	end
+
+	opts.on("-g", "--genotype", "Threshold likelihoods to infer genotype predictions (default 0.99 threshold)" ) do |n|
+		options[:threshold] ||= 0.99
+	end
+
+	opts.on("-t", "--threshold n", "Threshold likelihoods to infer genotype predictions with custom threshold" ) do |n|
+		options[:threshold] = n.to_f
+	end
+
+	opts.on("-m", "--monitor-memory interval", "Monitor and report memory usage at regular intervals" ) do |interval|
+		options[:monitor_memory] = interval
+	end
+
+end.parse!
+
+
+puts "Selected options:"
 pp options
 
 assert { options[:likelihood] or options[:dosage] or options[:threshold] } 
 assert { options[:vcf_file] }
 
-
-#keep_samples = []
-#if options[:keepfile] then
-#	keep_samples_set = keep_samples.to_set
-#	File.open(options[:keepfile]) do |file|
-#		file.each do |line|
-#			keep_samples << line.chomp.split(" ").first
-#		end
-#	end
-#end
-#
-#header = [ 
-#'##fileformat=VCFv4.1',
-#'##INFO=<ID=PSEUDO,Number=0,Type=Flag,Description="A dummy flag">',
-#'##FORMAT=<ID=GL,Number=.,Type=Float,Description="Genotype Likelihoods">'
-#].join("\n")
-
-
-#fields = [ "#CHROM","POS","ID","REF","ALT","QUAL","FILTER","INFO","FORMAT"] + keep_samples 
-#out.puts(fields.join("\t"))
+mm=MemoryUsageMonitor.new(options[:monitor_memory]) if options[:monitor_memory]
 
 VCF.new(options).write
+
+mm.stop unless mm.nil?
+
 
