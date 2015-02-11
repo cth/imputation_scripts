@@ -60,6 +60,11 @@ OptionParser.new do |opts|
 	end
 end.parse!
 
+def open_maybe_compressed(file)
+		dose_file_reader =  (/^.*gz$/.match(@options[:dosefile]) ?  Zlib::GzipReader : File).open(file)
+end
+
+
 
 class AssertionError < RuntimeError
 end
@@ -162,97 +167,98 @@ class VCF
 #				file.each do |line|
 #					samples_to_keep << line.chomp.split(" ").first
 #				end
-			end
-		end
-		keep_samples_set = keep_samples.to_set
-		keep_samples_set
-	end
+#			end
+#		end
+#		keep_samples_set = keep_samples.to_set
+#		keep_samples_set
+#	end
 
 
-	def write(outfile)
-			@vcfout = File.open(options[:vcf_file], "w")
+	def write
+			puts "Attempting to write #{@options[:vcf_file]}"
+			@vcfout = File.open(@options[:vcf_file], "w")
 			@vcfout.puts(header)
 
 			# MaCh-mode
 			if @options[:machdose] and @options[:machinfo] then # mach mode
-				from_mach(out) # writes to @vcfout
-			elsif options[:samplefile] and options[:genfile] then  # impute2 mode
-				impute2_to_vcf(out) # write to @vcfout
+				from_mach # writes to @vcfout
+			elsif @options[:samplefile] and @options[:genfile] then  # impute2 mode
+				impute2_to_vcf # write to @vcfout
 			end
+
+			@vcfout.close
 	end
 
 	def sample_fields_format
-		[ options[:threshold],options[:dosage],options[:likelihood] ].
+		[ @options[:threshold],@options[:dosage],@options[:likelihood] ].
 			zip(["GT","DS", "GL"]).
 			collect {|the| the.last if the.first }.
 			compact.
 			join(":") 
 	end
 
-	def from_mach(outfile) 
-		dosefile = opener.open(@options[:dosefile])
-
+	def from_mach
+		puts "from_mach called"
 		# Read .info file to create VCF mandatory fields
-		File.open(@options[:infofile]) do |file|
-			line = 1
-			file.each do |line|
+		vcflines = []
+		File.open(@options[:machinfo]) do |file|
+			file.each_with_index do |line,idx|
 				fields = line.chomp.split(" ")
-				if line == 1 then
+				if idx == 0 then
+					puts fields.inspect
 					assert { fields[0] == "SNP" }
 					assert { fields[1] == "Al1" }
 					assert { fields[2] == "Al2" }
 				else
 					chr, pos, extra = fields[0].split(":")	
 					vcfline = []
-					vcflines << (
-						[]	<< 
-							<< @options[:chr] || chr # CHR
-							<< pos			 		# POS 
-							<< fields[0] 			# ID
-							<< fields[1]		# REF allele 
-							<< fields[2]		# ALT allele 
-							<< 100			# QUAL (pseudo)
-							<< "PASS"		# FILTER (pseudo)
-							<< "PSEUDO=1"		# INFO (we do not use for anything)
-							<< sample_fields_format)
+					vcfline << chr # CHR
+					vcfline << pos			 		# POS 
+					vcfline << fields[0] 			# ID
+					vcfline << fields[1]		# REF allele 
+					vcfline << fields[2]		# ALT allele 
+					vcfline << 100			# QUAL (pseudo)
+					vcfline << "PASS"		# FILTER (pseudo)
+					vcfline << "PSEUDO=1"		# INFO (we do not use for anything)
+					vcfline	<< sample_fields_format
+					vcflines << vcfline
 				end
 			end
 		end
 
-		dose_file_reader =  /^.*gz$/.match(@options[:dosefile]) ?  Zlib::GzipReader : File
-
-		vcf_line_index = 0
+		puts "Extracted #{vcflines.size} variants from info file (#{@options[:machinfo]})"
 
 		samples = []
-		dose_file_reader.open(@options[:dosefile]) do |file|
-			file.each do |line|
-
+		(/^.*gz$/.match(@options[:dosefile]) ?  Zlib::GzipReader : File).open(@options[:machdose]) do |file|
+			file.each_with_index do |line,idx|
 				fields = line.chomp.split(" ")
-				next unless  (@options[:keepfile] and keep_samples_set.include?(fields[0])) or !@options[:keepfile]
+				assert { fields.size-2 == vcflines.size } 
+
+				#next unless  (@options[:keepfile] and keep_samples_set.include?(fields[0])) or !@options[:keepfile]
 
 				samples << fields[0]
 
-				2.upto(fields.size) do |dosage|
-					vcflines[vcf_line_index] << [:threshold,:dosage,:likelihood].collect { |type|
+				2.upto(fields.size-1) do |snp_idx|
+					vcflines[snp_idx-2] << [:threshold,:dosage,:likelihood].collect do |type|
 						if @options[type] then
 							case type
 							when :threshold
-								dosage_to_genotype(dosage)
+								dosage_to_genotype(fields[snp_idx])
 							when :dosage
-								dosage
+								fields[snp_idx]
 							when :likelihood
-								likelihoods_from_dosage(dosage)
+								likelihoods_from_dosage(fields[snp_idx])
 							end 
-						end 
-						}.compact.join(":")
+						end
+					end.compact.join(":")
 				end
 			end
-		end 
+		end
 
-		out.puts
-		out.puts((mandatory_fields + samples).join("\t"))
-
-		vcflines.each { |vcfline| out.puts(vcfline[vcf_line_index].join("\t")) }
+		# Fields header line
+		@vcfout.puts((@@mandatory_fields + samples).join("\t"))
+		# variant lines
+		vcflines.each { |vcfline| @vcfout.puts(vcfline.join("\t")) }
 	end
 
 	def from_impute2(outfile)
@@ -354,46 +360,32 @@ class VCF
 
 end
 
-
 puts "Selected options"
 pp options
 
 assert { options[:likelihood] or options[:dosage] or options[:threshold] } 
+assert { options[:vcf_file] }
 
 
-keep_samples = []
-if options[:keepfile] then
-	keep_samples_set = keep_samples.to_set
-	File.open(options[:keepfile]) do |file|
-		file.each do |line|
-			keep_samples << line.chomp.split(" ").first
-		end
-	end
-end
-
-header = [ 
-'##fileformat=VCFv4.1',
-'##INFO=<ID=PSEUDO,Number=0,Type=Flag,Description="A dummy flag">',
-'##FORMAT=<ID=GL,Number=.,Type=Float,Description="Genotype Likelihoods">'
-].join("\n")
-
-out = File.open(options[:vcf_file], "w")
-
-out.puts(header)
-#bout = BufferedFileOutput.new(out,1000)
-
-# MaCh-mode
-if options[:machdose] and options[:machinfo] then # mach mode
-	#options[:input_format] = :mach
-	mach_to_vcf(out)
-elsif options[:samplefile] and options[:genfile] then  # impute2 mode
-	#options[:input_format] = :impute2
-	impute2_to_vcf(out)
-end
+#keep_samples = []
+#if options[:keepfile] then
+#	keep_samples_set = keep_samples.to_set
+#	File.open(options[:keepfile]) do |file|
+#		file.each do |line|
+#			keep_samples << line.chomp.split(" ").first
+#		end
+#	end
+#end
+#
+#header = [ 
+#'##fileformat=VCFv4.1',
+#'##INFO=<ID=PSEUDO,Number=0,Type=Flag,Description="A dummy flag">',
+#'##FORMAT=<ID=GL,Number=.,Type=Float,Description="Genotype Likelihoods">'
+#].join("\n")
 
 
 #fields = [ "#CHROM","POS","ID","REF","ALT","QUAL","FILTER","INFO","FORMAT"] + keep_samples 
 #out.puts(fields.join("\t"))
 
-
+VCF.new(options).write
 
