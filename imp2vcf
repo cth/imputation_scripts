@@ -5,6 +5,7 @@ require 'zlib'
 require 'thread'
 require 'optparse'
 require 'filesize'
+require 'test/unit'
 require 'distribution'
 $stdout.sync = true
 
@@ -15,7 +16,7 @@ end
 class AssertionError < RuntimeError
 end
 
-def assert &block
+def rt_assert &block
     raise AssertionError unless yield
 end
 
@@ -73,59 +74,49 @@ class BufferedFileOutput
 	end
 end 
 
-# The Dosage represents the predicted dosage of the non reference allele given the data available, 
-# it will always have a value between 0 and 2.
-# The formula is Dosage = Pr(Het|Data) + 2*Pr(Alt|Data)
-# See, http://www.1000genomes.org/faq/what-does-genotype-dosage-mean-phase1-integrated-call-set
-def genotype_likelihoods_to_dosage(p_aa, p_ab, p_bb)
-	p_bb * 2 + p_ab 
-end
 
-def dosage_to_genotype(dosage)
-	genotypes012 = [ "0/0", "0/1", "1/1" ]
-	delta_dosage012 = [ dosage,  (dosage - 1).abs, (dosage - 2).abs ]
-	min_delta = 2
-	min_index = nil
-	delta_dosage012.each_with_index do |delta,index|
-		if delta < min_delta then
-			min_delta = delta
-			min_index = index
+class GenoConverter
+	class << self
+		# The Dosage represents the predicted dosage of the non reference allele given the data available, 
+		# it will always have a value between 0 and 2.
+		# The formula is Dosage = Pr(Het|Data) + 2*Pr(Alt|Data)
+		# See, http://www.1000genomes.org/faq/what-does-genotype-dosage-mean-phase1-integrated-call-set
+		def likelihoods_to_dosage(p_aa, p_ab, p_bb)
+			p_bb * 2 + p_ab
+		end
+
+		def threshold_likelihoods(likelihoods,threshold)
+			threshold_genotype = [ "0/0", "0/1", "1/1" ] 
+			max_l = 0
+			max_i = nil
+			likelihoods.each_with_index do |l,i|
+				if l > max_l then
+					max_l = l
+					max_i = i
+				end
+			end
+
+			if max_l > threshold then
+				threshold_genotype[max_i]
+			else
+				"."
+			end
+		end
+
+		# Genotype likelihoods are required to be log10 scaled in VCF 
+		def log_likelihoods(likelihoods)
+			likelihoods.map { |l|  l.to_f == 0 ? -100 : Math.log10(l.to_f) }
+		end
+
+		def dosage_to_likelihoods(dosage)
+			deltas = [ dosage,  (dosage - 1).abs, (dosage - 2).abs ]
+			deltas.collect { |d|  Distribution::Beta.pdf(d,1,2)/2 }
+		end
+
+		def dosage_to_genotype(dosage, likelihood_threshold)
+			threshold_likelihoods(dosage_to_likelihoods(dosage), likelihood_threshold)
 		end
 	end
-
-	assert { !min_index.nil? }
-
-	genotypes012[min_index]
-end
-
-def threshold_likelihoods(likelihoods,threshold)
-	threshold_genotype = [ "0/0", "0/1", "1/1" ] 
-	max_l = 0
-	max_i = nil
-	likelihoods.each_with_index do |l,i|
-		if l > max_l then
-			max_l = l
-			max_i = i
-		end
-	end
-
-	if max_l > threshold then
-		threshold_genotype[max_i]
-	else
-		"."
-	end
-end
-
-# Genotype likelihoods are required to be log10 scaled in VCF 
-def log_likelihoods(likelihoods)
-	likelihoods.map { |l|  l.to_f == 0 ? -100 : Math.log10(l.to_f) }
-end
-
-def dosage_to_likelihoods(dosage)
-	deltas = [ dosage,  (dosage - 1).abs, (dosage - 2).abs ]
-	pdfs = deltas.collect { |d|  Distribution::Beta.pdf(d,1,2) }
-	sum_pdfs = pdfs.inject { |a,b| a+b  }
-	pdfs.collect { |p| p / sum_pdfs } # normalize
 end
 
 class VCF
@@ -191,9 +182,9 @@ class VCF
 				fields = line.chomp.split(" ")
 				if idx == 0 then
 					puts fields.inspect
-					assert { fields[0] == "SNP" }
-					assert { fields[1] == "Al1" }
-					assert { fields[2] == "Al2" }
+					rt_assert { fields[0] == "SNP" }
+					rt_assert { fields[1] == "Al1" }
+					rt_assert { fields[2] == "Al2" }
 				else
 					chr, pos, extra = fields[0].split(":")	
 					vcfline = []
@@ -219,7 +210,7 @@ class VCF
 			file.each_with_index do |line,idx|
 				fields = line.chomp.split(" ")
 				puts [fields.size, vcflines.size ].inspect
-				assert { fields.size-2 == vcflines.size } 
+				rt_assert { fields.size-2 == vcflines.size } 
 
 				#next unless  (@options[:keepfile] and keep_samples_set.include?(fields[0])) or !@options[:keepfile]
 
@@ -231,11 +222,11 @@ class VCF
 						if @options[type] then
 							case type
 							when :threshold
-								threshold_likelihoods(dosage_to_likelihoods(dosage),@options[:threshold])
+								GenoConverter.dosage_to_genotype(dosage, @options[:threshold])
 							when :dosage
 								dosage
 							when :likelihood
-								log_likelihoods(dosage_to_likelihoods(dosage)).join(",")
+								GenoConverter.log_likelihoods(dosage_to_likelihoods(dosage)).join(",")
 							end 
 						end
 					end.compact.join(":")
@@ -246,7 +237,7 @@ class VCF
 		# Fields header line
 		@vcfout.puts((@@mandatory_fields + samples).join("\t"))
 		# variant lines
-		vcflines.each { |vcfline| @vcfout.puts(vcfline.join("\t")) }
+		vcflines.each { |vcfline| @vcfout.puts(vcfline.collect { |e| e.to_s }.join("\t")) }
 	end
 
 	def from_impute2(outfile)
@@ -313,7 +304,7 @@ class VCF
 				dosages = []
 				genotypes = []
 				
-				assert { fields.size-5 == samples.size*3 } 
+				rt_assert { fields.size-5 == samples.size*3 } 
 
 				5.upto(fields.size-1) do |i|
 					next if skip_samples[ (i-5) / 3 ]
@@ -322,7 +313,7 @@ class VCF
 					
 					if i % 3 == checkpoint then
 
-						assert { likelihoods.size == 3 }
+						rt_assert { likelihoods.size == 3 }
 
 						vcfline << [:threshold,:dosage,:likelihood].collect { |type|
 							##puts options[:type]
@@ -346,6 +337,34 @@ class VCF
 		bout.close
 	end
 
+end
+##################################### tests ##################################
+
+class Test::Unit::Runner
+  @@stop_auto_run = true
+end
+
+
+class TestGenoConverter < Test::Unit::TestCase
+	def test_dosage_to_likelihoods
+		epsilon = 0.000001
+		l00, _, _ = *GenoConverter.dosage_to_likelihoods(0)
+		assert_in_delta(1, l00, epsilon) 
+
+		_, l01, _ = *GenoConverter.dosage_to_likelihoods(1)
+		assert_in_delta(1, l01, epsilon) 
+
+		_, _, l11 = *GenoConverter.dosage_to_likelihoods(2)
+		assert_in_delta(1, l11, epsilon) 
+
+		# There and back again:
+		0.step(2,0.01) do |d1|
+			l=GenoConverter.dosage_to_likelihoods(d1)
+			d2=GenoConverter.likelihoods_to_dosage(*l)
+			diff=(d1-d2).abs
+			assert_in_delta(0, diff, epsilon) 
+		end
+	end
 end
 
 ##################################### main ###################################
@@ -413,19 +432,23 @@ OptionParser.new do |opts|
 		options[:monitor_memory] = interval
 	end
 
+	opts.on("-x", "--test", "Run unit tests") do
+		options[:test] = true
+	end
+
 end.parse!
 
 
 puts "Selected options:"
 pp options
 
-assert { options[:likelihood] or options[:dosage] or options[:threshold] } 
-assert { options[:vcf_file] }
+Test::Unit::Runner.new.run if options[:test]
+
+rt_assert { options[:likelihood] or options[:dosage] or options[:threshold] } 
+rt_assert { options[:vcf_file] }
 
 mm=MemoryUsageMonitor.new(options[:monitor_memory]) if options[:monitor_memory]
 
 VCF.new(options).write
 
 mm.stop unless mm.nil?
-
-
