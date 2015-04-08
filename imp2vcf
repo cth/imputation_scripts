@@ -159,7 +159,9 @@ class VCF
 		if @options[:machdose] and @options[:machinfo] then # mach mode
 			from_mach # writes to @vcfout
 		elsif @options[:samplefile] and @options[:genfile] then  # impute2 mode
-			impute2_to_vcf # write to @vcfout
+			from_impute2 # write to @vcfout
+		else
+			raise "Missing input files" 
 		end
 
 		@vcfout.close
@@ -240,7 +242,8 @@ class VCF
 		vcflines.each { |vcfline| @vcfout.puts(vcfline.collect { |e| e.to_s }.join("\t")) }
 	end
 
-	def from_impute2(outfile)
+	def from_impute2
+		puts "here"
 		# Read sample file:
 		samples = [] 
 		lineno=0
@@ -249,43 +252,46 @@ class VCF
 				lineno = lineno + 1
 				# FIXME: This should only happen when we have a header
 				# next if lineno == 1
-				samples << line.chomp.split(" ").first
+				samples << line.chomp.split(" ")[1]
+				#samples << line.chomp.split(" ").first
 			end
 		end
-		puts "Read #{lineno-1} samples from #{options[:samplefile]}"
+		puts "Read #{lineno-1} samples from #{@options[:samplefile]}"
 
 		# Create a skip_samples as an index over the samplefile 
 		skip_samples = []
-		if options[:keepfile] then
+		if @options[:keepfile] then
 			keep_samples_set = keep_samples.to_set
 
-			if options[:samplefile] then
+			if @options[:samplefile] then
 				keep_samples = []
 				0.upto(samples.length-1) do |i| 
 					if keep_samples_set.include?(samples[i])
 						keep_samples << samples[i] 
-						skip_samples[i] = false 
+						skip_samples[i] = false
 					else
 						skip_samples[i] = true
 					end
 				end
 			end
 		else
-			0.upto(samples.length-1) { |i| skip_samples[i] = false } if options[:samplefile]  
+			0.upto(samples.length-1) { |i| skip_samples[i] = false } if @options[:samplefile]  
 			keep_samples = samples
 		end	
-		puts "Keeping #{keep_samples.size}/#{lineno-1} samples"
+		puts "Keeping #{keep_samples.size}/#{lineno} samples"
 
-		opener = /^.*gz$/.match(options[:genfile]) ? Zlib::GzipReader : File
+		opener = /^.*gz$/.match(@options[:genfile]) ? Zlib::GzipReader : File
 
 		checkpoint = 7 % 3
 		lineno=1
 
-		opener.open(options[:genfile]) do |file|
+		@vcfout.puts((@@mandatory_fields + keep_samples).join("\t"))
+
+		opener.open(@options[:genfile]) do |file|
 			file.each do |line|
 				vcfline = []
 				fields = line.chomp.split(" ")
-				vcfline << options[:chr] || fields[0]	# CHR
+				vcfline << @options[:chr] || fields[0]	# CHR
 				vcfline << fields[2] 		# POS 
 				vcfline << fields[1]		# ID
 				vcfline << fields[3]		# REF allele 
@@ -294,7 +300,7 @@ class VCF
 				vcfline << "PASS"		# FILTER (pseudo)
 				vcfline << "PSEUDO=1"		# INFO (we do not use for anything)
 
-				vcfline << [ options[:threshold],options[:dosage],options[:likelihood] ].
+				vcfline << [ @options[:threshold],@options[:dosage],@options[:likelihood] ].
 						zip(["GT","DS", "GL"]).
 						collect {|the| the.last if the.first }.
 						compact.
@@ -317,24 +323,23 @@ class VCF
 
 						vcfline << [:threshold,:dosage,:likelihood].collect { |type|
 							##puts options[:type]
-							if options[type] then
+							if @options[type] then
 								case type
 								when :threshold
-									threshold_likelihoods(likelihoods,options[:threshold].to_f)
+									GenoConverter.threshold_likelihoods(likelihoods,@options[:threshold].to_f)
 								when :dosage
-									genotype_likelihoods_to_dosage(*likelihoods)
+									GenoConverter.genotype_likelihoods_to_dosage(*likelihoods)
 								when :likelihood
-									log_likelihoods(likelihoods).join(",")
+									GenoConveter.log_likelihoods(likelihoods).join(",")
 								end 
 							end 
 						}.compact.join(":")
 						likelihoods = []
 					end
 				end
-				bout.puts(vcfline.join("\t"))
+				@vcfout.puts(vcfline.join("\t"))
 			end
 		end
-		bout.close
 	end
 
 end
