@@ -228,7 +228,7 @@ class VCF
 							when :dosage
 								dosage
 							when :likelihood
-								GenoConverter.log_likelihoods(dosage_to_likelihoods(dosage)).join(",")
+								GenoConverter.log_likelihoods(GenoConverter.dosage_to_likelihoods(dosage)).join(",")
 							end 
 						end
 					end.compact.join(":")
@@ -328,9 +328,9 @@ class VCF
 								when :threshold
 									GenoConverter.threshold_likelihoods(likelihoods,@options[:threshold].to_f)
 								when :dosage
-									GenoConverter.genotype_likelihoods_to_dosage(*likelihoods)
+									GenoConverter.likelihoods_to_dosage(*likelihoods)
 								when :likelihood
-									GenoConveter.log_likelihoods(likelihoods).join(",")
+									GenoConverter.log_likelihoods(likelihoods).join(",")
 								end 
 							end 
 						}.compact.join(":")
