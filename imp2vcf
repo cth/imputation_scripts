@@ -122,7 +122,7 @@ end
 class VCF
 	@@mandatory_fields = [ "#CHROM","POS","ID","REF","ALT","QUAL","FILTER","INFO","FORMAT"]
 
-	def initialize(options,keepsamples=nil)
+	def initialize(options)
 		@options = options
 	end
 
@@ -133,22 +133,6 @@ class VCF
 			'##FORMAT=<ID=GL,Number=.,Type=Float,Description="Genotype Likelihoods">'
 		].join("\n")
 	end
-
-#	def keep_samples
-#		return @keep_samples unless @keep_samples.nil?
-#
-#		@keep_samples = []
-#		if options[:keepfile] then
-#			File.open(options[:keepfile]) do |file|
-#				file.each do |line|
-#					samples_to_keep << line.chomp.split(" ").first
-#				end
-#			end
-#		end
-#		keep_samples_set = keep_samples.to_set
-#		keep_samples_set
-#	end
-
 
 	def write
 		puts "Attempting to write #{@options[:vcf_file]}"
@@ -214,8 +198,6 @@ class VCF
 				puts [fields.size, vcflines.size ].inspect
 				rt_assert { fields.size-2 == vcflines.size } 
 
-				#next unless  (@options[:keepfile] and keep_samples_set.include?(fields[0])) or !@options[:keepfile]
-
 				samples << fields[0]
 
 				2.upto(fields.size-1) do |snp_idx|
@@ -258,34 +240,12 @@ class VCF
 		end
 		puts "Read #{lineno-1} samples from #{@options[:samplefile]}"
 
-		# Create a skip_samples as an index over the samplefile 
-		skip_samples = []
-		if @options[:keepfile] then
-			keep_samples_set = keep_samples.to_set
-
-			if @options[:samplefile] then
-				keep_samples = []
-				0.upto(samples.length-1) do |i| 
-					if keep_samples_set.include?(samples[i])
-						keep_samples << samples[i] 
-						skip_samples[i] = false
-					else
-						skip_samples[i] = true
-					end
-				end
-			end
-		else
-			0.upto(samples.length-1) { |i| skip_samples[i] = false } if @options[:samplefile]  
-			keep_samples = samples
-		end	
-		puts "Keeping #{keep_samples.size}/#{lineno} samples"
-
 		opener = /^.*gz$/.match(@options[:genfile]) ? Zlib::GzipReader : File
 
 		checkpoint = 7 % 3
 		lineno=1
 
-		@vcfout.puts((@@mandatory_fields + keep_samples).join("\t"))
+		@vcfout.puts((@@mandatory_fields + samples).join("\t"))
 
 		opener.open(@options[:genfile]) do |file|
 			file.each do |line|
@@ -407,10 +367,6 @@ OptionParser.new do |opts|
 		options[:machinfo] = file
 	end
 
-	opts.on("-K", "--keep file", "A file with samples to keep in VCF. One per line.") do |file|
-		options[:keepfile] = file
-	end
-
 	# Output file
 	opts.on("-V", "--vcf-file file", ".vcf output file") do |file|
 		options[:vcf_file] = file	
@@ -447,13 +403,12 @@ end.parse!
 puts "Selected options:"
 pp options
 
-Test::Unit::Runner.new.run if options[:test]
-
-rt_assert { options[:likelihood] or options[:dosage] or options[:threshold] } 
-rt_assert { options[:vcf_file] }
-
-mm=MemoryUsageMonitor.new(options[:monitor_memory]) if options[:monitor_memory]
-
-VCF.new(options).write
-
-mm.stop unless mm.nil?
+if options[:test] then 
+	Test::Unit::Runner.new.run if options[:test]
+else
+	rt_assert { options[:likelihood] or options[:dosage] or options[:threshold] } 
+	rt_assert { options[:vcf_file] or options[:test]}
+	mm=MemoryUsageMonitor.new(options[:monitor_memory]) if options[:monitor_memory]
+	VCF.new(options).write
+	mm.stop unless mm.nil?
+end
