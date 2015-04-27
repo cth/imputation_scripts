@@ -225,7 +225,6 @@ class VCF
 	end
 
 	def from_impute2
-		puts "here"
 		# Read sample file:
 		samples = [] 
 		lineno=0
@@ -239,6 +238,24 @@ class VCF
 			end
 		end
 		puts "Read #{lineno-1} samples from #{@options[:samplefile]}"
+
+
+		markers = []
+		if @options[:imputeinfo] then 
+			File.open(@options[:imputeinfo]) do |file|
+				lineno = 0
+				file.each do |line|
+					fields = line.chomp.split(/ /)	
+					if lineno == 0
+						rt_assert {(fields[4] == "info") and (fields[5] == "certainty")}
+					else
+						markers[lineno] = { :snp => fields[1], :info => fields[4], :certainty => fields[5] }
+					end
+					lineno = lineno + 1
+				end
+			end
+			puts "Read #{lineno-1} markers from #{@options[:imputeinfo]}"
+		end
 
 		opener = /^.*gz$/.match(@options[:genfile]) ? Zlib::GzipReader : File
 
@@ -258,7 +275,14 @@ class VCF
 				vcfline << fields[4]		# ALT allele 
 				vcfline << 100			# QUAL (pseudo)
 				vcfline << "PASS"		# FILTER (pseudo)
-				vcfline << "PSEUDO=1"		# INFO (we do not use for anything)
+				# INFO
+				if @options[:imputeinfo] then
+					rt_assert { not markers[lineno].nil? }
+					rt_assert { fields[1] == markers[lineno][:snp] }
+					vcfline << "INFO=#{markers[lineno][:info]};CERTAINTY=#{markers[lineno][:certainty]}" unless markers[lineno].nil?
+				else	
+					vcfline << "PSEUDO=1"		# INFO (we do not use for anything)
+				end
 
 				vcfline << [ @options[:threshold],@options[:dosage],@options[:likelihood] ].
 						zip(["GT","DS", "GL"]).
@@ -273,8 +297,6 @@ class VCF
 				rt_assert { fields.size-5 == samples.size*3 } 
 
 				5.upto(fields.size-1) do |i|
-					next if skip_samples[ (i-5) / 3 ]
-
 					likelihoods << fields[i].to_f
 					
 					if i % 3 == checkpoint then
@@ -298,6 +320,7 @@ class VCF
 					end
 				end
 				@vcfout.puts(vcfline.join("\t"))
+				lineno = lineno + 1
 			end
 		end
 	end
@@ -357,6 +380,10 @@ OptionParser.new do |opts|
 
 	opts.on("-G", "--gen-file file", ".gen file") do |file|
 		options[:genfile] = file
+	end
+
+	opts.on("-J", "--impute-info file", "Impute info file") do |file|
+		options[:imputeinfo] = file
 	end
 
 	opts.on("-D", "--dose file", "MaCH dose file.") do |file| 
