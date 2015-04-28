@@ -43,7 +43,7 @@ module Chunking
 			"#\$ -N x.imp#{chromosome}-#{chunk_start}",
 			"#\$ -cwd",
 			"#\$ -l h_vmem=4G",
-			"#\$ -l memfree=4G",
+			"#\$ -l mem_free=4G",
 			"#\$ -pe smp 1",
 			impute_cmd
 		].join("\n")
