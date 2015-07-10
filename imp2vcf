@@ -3,10 +3,13 @@ require 'pp'
 require 'set'
 require 'zlib'
 require 'thread'
+require 'thread/pool'
 require 'optparse'
 require 'filesize'
 require 'test/unit'
 require 'distribution'
+require 'tempfile'
+require 'thread'
 $stdout.sync = true
 
 def open_maybe_compressed(file)
@@ -129,7 +132,7 @@ class VCF
 	def header
 		[ 
 			'##fileformat=VCFv4.1',
-			'##INFO=<ID=PSEUDO,Number=0,Type=Flag,Description="A dummy flag">',
+			'##INFO=<ID=INFO,Number=0,Type=Flag,Description="MACH info Rsq (R-squared quality of imputation)">',
 			'##FORMAT=<ID=GL,Number=.,Type=Float,Description="Genotype Likelihoods">'
 		].join("\n")
 	end
@@ -160,68 +163,92 @@ class VCF
 	end
 
 	def from_mach
-		puts "from_mach called"
 		# Read .info file to create VCF mandatory fields
 		vcflines = []
-		File.open(@options[:machinfo]) do |file|
-			file.each_with_index do |line,idx|
-				fields = line.chomp.split(" ")
-				if idx == 0 then
-					puts fields.inspect
-					rt_assert { fields[0] == "SNP" }
-					rt_assert { fields[1] == "Al1" }
-					rt_assert { fields[2] == "Al2" }
-				else
-					chr, pos, extra = fields[0].split(":")	
-					vcfline = []
-					vcfline << chr # CHR
-					vcfline << pos			 		# POS 
-					vcfline << fields[0] 			# ID
-					vcfline << fields[1]		# REF allele 
-					vcfline << fields[2]		# ALT allele 
-					vcfline << 100			# QUAL (pseudo)
-					vcfline << "PASS"		# FILTER (pseudo)
-					vcfline << "PSEUDO=1"		# INFO (we do not use for anything)
-					vcfline	<< sample_fields_format
-					vcflines << vcfline
-				end
+
+		info_lines = File.readlines(@options[:machinfo]) 
+		puts "slurped #{@options[:machinfo]}"
+			info_lines.each_with_index do |line,idx|
+#				workers.process do 
+					fields = line.chomp.split(" ")
+					if idx == 0 then
+						puts fields.inspect
+						rt_assert { fields[0] == "SNP" }
+						rt_assert { fields[1] == "Al1" }
+						rt_assert { fields[2] == "Al2" }
+					else
+						chr, pos, extra = fields[0].split(":")	
+						vcfline = []
+						vcfline << chr # CHR
+						vcfline << pos			# POS 
+						vcfline << fields[0] 		# ID
+						vcfline << fields[1]		# REF allele 
+						vcfline << fields[2]		# ALT allele 
+						vcfline << 100			# QUAL (pseudo)
+						vcfline << "PASS"		# FILTER (pseudo)
+						vcfline << "INFO=#{fields[6]}"	# INFO
+						vcfline	<< sample_fields_format
+						vcflines[idx-1] = vcfline
+					end
+#				end
 			end
-		end
+		#end
+
 
 		puts "Extracted #{vcflines.size} variants from info file (#{@options[:machinfo]})"
 
 		samples = []
+		tmpfiles = [] # We open store results a temporary file for each individual 
+		workers = Thread.pool(@options[:threads]) 
 
 		gzfile?(@options[:machdose]).open(@options[:machdose]) do |file|
 			file.each_with_index do |line,idx|
-				fields = line.chomp.split(" ")
-				puts [fields.size, vcflines.size ].inspect
-				rt_assert { fields.size-2 == vcflines.size } 
+				workers.process do 	
+					fields = line.chomp.split(" ")
+					puts [fields.size, vcflines.size ].inspect
+					rt_assert { fields.size-2 == vcflines.size } 
 
-				samples << fields[0]
+					samples << fields[0]
 
-				2.upto(fields.size-1) do |snp_idx|
-					vcflines[snp_idx-2] << [:threshold,:dosage,:likelihood].collect do |type|
-						dosage = fields[snp_idx].to_f
-						if @options[type] then
-							case type
-							when :threshold
-								GenoConverter.dosage_to_genotype(dosage, @options[:threshold])
-							when :dosage
-								dosage
-							when :likelihood
-								GenoConverter.log_likelihoods(GenoConverter.dosage_to_likelihoods(dosage)).join(",")
-							end 
-						end
-					end.compact.join(":")
+					tmpfile = Tempfile.new("imp2vcf-")
+					2.upto(fields.size-1) do |snp_idx|
+						#vcflines[snp_idx-2] << [:threshold,:dosage,:likelihood].collect do |type|
+						record = [:threshold,:dosage,:likelihood].collect do |type|
+							dosage = fields[snp_idx].to_f
+							if @options[type] then
+								case type
+								when :threshold
+									GenoConverter.dosage_to_genotype(dosage, @options[:threshold])
+								when :dosage
+									dosage
+								when :likelihood
+									GenoConverter.log_likelihoods(GenoConverter.dosage_to_likelihoods(dosage)).join(",")
+								end 
+							end
+						end.compact.join(":")
+						tmpfile.puts(record)
+					end
+					tmpfiles[idx] = tmpfile
 				end
 			end
 		end
 
+		workers.shutdown
+
+		puts "writing VCF file"
+
+		# Make sure that we have a tmpfile for each sample
+		rt_assert { samples.size == tmpfiles.size }
+
 		# Fields header line
 		@vcfout.puts((@@mandatory_fields + samples).join("\t"))
+		puts tmpfiles.inspect
+		tmpfiles.each { |tmp| tmp.rewind }
 		# variant lines
-		vcflines.each { |vcfline| @vcfout.puts(vcfline.collect { |e| e.to_s }.join("\t")) }
+		vcflines.size.times do |i|
+			@vcfout.puts vcflines[i].collect { |e| e.to_s }.join("\t") + "\t" + (tmpfiles.collect { |x| x.readline.chomp }).join("\t")
+		end
+		tmpfiles.each { |f| f.close }
 	end
 
 	def from_impute2
@@ -324,7 +351,6 @@ class VCF
 			end
 		end
 	end
-
 end
 ##################################### tests ##################################
 
@@ -360,7 +386,8 @@ end
 options = {
 	:samplefile => nil,
 	:dosage => false,
-	:threshold => false 
+	:threshold => false,
+	:threads => 1
 }
 
 OptionParser.new do |opts|
@@ -397,6 +424,10 @@ OptionParser.new do |opts|
 	# Output file
 	opts.on("-V", "--vcf-file file", ".vcf output file") do |file|
 		options[:vcf_file] = file	
+	end
+	
+	opts.on("-p" ,"-processors", "How many processers to use") do |threads|
+		options[:threads] = threads.to_i
 	end
 
 	# Output fields
