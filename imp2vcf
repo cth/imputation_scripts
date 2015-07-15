@@ -201,8 +201,10 @@ class VCF
 		tmpfiles = [] # We open store results a temporary file for each individual 
 		workers = Thread.pool(@options[:threads]) 
 
+		
 		gzfile?(@options[:machdose]).open(@options[:machdose]) do |file|
 			file.each_with_index do |line,idx|
+				puts "processing line #{idx}"
 				workers.process do 	
 					fields = line.chomp.split(" ")
 					puts [fields.size, vcflines.size ].inspect
@@ -210,7 +212,11 @@ class VCF
 
 					samples << fields[0]
 
-					tmpfile = Tempfile.new("imp2vcf-")
+					if @options[:tmpdir].nil?
+						tmpfile = Tempfile.new("imp2vcf-")
+					else
+						tmpfile = Tempfile.new("imp2vcf-",@options[:tmpdir])
+					end
 					2.upto(fields.size-1) do |snp_idx|
 						#vcflines[snp_idx-2] << [:threshold,:dosage,:likelihood].collect do |type|
 						record = [:threshold,:dosage,:likelihood].collect do |type|
@@ -421,10 +427,17 @@ OptionParser.new do |opts|
 		options[:machinfo] = file
 	end
 
-	# Output file
+	# Output file(s)
 	opts.on("-V", "--vcf-file file", ".vcf output file") do |file|
 		options[:vcf_file] = file	
 	end
+
+	opts.on("-T", "--tmpdir dir", "Temporary files directory") do |tmpdir|
+		puts tmpdir.inspect
+		throw "#{tmpddir} is not a valid directory" unless File.directory?(tmpdir)
+		options[:tmpdir] = tmpdir
+	end
+
 	
 	opts.on("-p" ,"-processors", "How many processers to use") do |threads|
 		options[:threads] = threads.to_i
@@ -450,6 +463,7 @@ OptionParser.new do |opts|
 	opts.on("-m", "--monitor-memory interval", "Monitor and report memory usage at regular intervals" ) do |interval|
 		options[:monitor_memory] = interval
 	end
+
 
 	opts.on("-x", "--test", "Run unit tests") do
 		options[:test] = true
