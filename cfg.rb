@@ -15,6 +15,10 @@ $cfg = Configuration.new({
 	# Where the imputation panel resides
 	"panel_dir" => "../1000GP_Phase3_b37",
 
+	# Where the imputation panel resides (map files)
+	"genetic_map_dir" => "../1000GP_Phase3_b37",
+
+
 	"shapeit_threads" => 16,
 
 	# setup progs
