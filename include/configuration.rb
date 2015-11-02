@@ -28,6 +28,8 @@ class Configuration
 		end
 	end
 
+	alias :known_haps :phased_haps
+
 	def unphased_stem(chr)
 		"#{@hsh["unphased_dir"]}/chr#{chr}"
 	end
@@ -41,9 +43,10 @@ class Configuration
 	# catch all
 	def method_missing(method_name, *argument, &block) 
 		puts method_name.inspect
+		puts @hsh.inspect
 		if method_name.to_s =~ /(.*)=$/ then
 			@hsh[$1] = argument.first 
-		elsif @hsh.include?(method_name) then
+		elsif @hsh.include?(method_name.to_s) then
 			@hsh[method_name.to_s]
 		else
 			super

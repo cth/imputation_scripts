@@ -1,12 +1,12 @@
 module Chunking
 
-	def Chunking::make_script( cnf, chromosome, chunk_start, chunk_end)
+	def Chunking::make_script( chromosome, chunk_start, chunk_end)
 		impute_cmd = [
 			"impute2",
-			"-m #{cnf.map(chromosome)}",
-			"-h #{cnf.haps(chromosome)}",
-			"-l #{cnf.legend(chromosome)}",
-			chromosome==23 ? "-chrX -sample_known_haps_g #{cnf.known_haps(chromosome)}" : "-known_haps_g #{cnf.known_haps(chromosome)}",
+			"-m #{$cfg.map(chromosome)}",
+			"-h #{$cfg.haps(chromosome)}",
+			"-l #{$cfg.legend(chromosome)}",
+			chromosome==23 ? "-chrX -sample_known_haps_g #{$cfg.known_haps(chromosome)}" : "-known_haps_g #{$cfg.known_haps(chromosome)}",
 			"-use_prephased_g",
 			"-o_gz",
 			"-Ne 20000",
@@ -35,8 +35,8 @@ module Chunking
 
 	def Chunking::infer_chunks(chromosome,max_chunk_size=2000000) 
 		positions=[]
-		puts "making chunks from #{@@unphased_dir}/chr#{chromosome}.bim"
-		DF.new("#{@@unphased_dir}/chr#{chromosome}.bim").each { |_,_,_,pos,_,_| positions << pos.to_i }
+		puts "making chunks from #{ $cfg.unphased_bim(chromosome) }" 
+		DF.new($cfg.unphased_bim(chromosome)).each { |_,_,_,pos,_,_| positions << pos.to_i }
 		positions.sort!
 		index = positions.first.to_i
 		chunks = []
