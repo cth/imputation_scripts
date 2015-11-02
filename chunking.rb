@@ -1,41 +1,56 @@
 module Chunking
-	@@genetic_map_dir="map" #ALL_1000G_phase1integrated_v3_impute"
-	#@@genetic_map_dir="../ALL.integrated_phase1_v3.20101123.snps_indels_svs.genotypes.nomono"
-	@@panel_dir=@@genetic_map_dir
-	@@phased_dir="phasing/phased"
-	@@unphased_dir="phasing/unphased"
+	class Configuration
+		attr_accessor :phased_dir, :unphased_dir, :genetic_map_dir, :panel_dir
 
-	def Chunking::make_script( chromosome, chunk_start, chunk_end)
-		if chromosome == 23 then
-			panel_chr="X_nonPAR"
-			impute_cmd = [
-				"impute2",
-				"-m #{@@genetic_map_dir}/genetic_map_chr#{panel_chr}_combined_b37.txt",
-				"-h #{@@panel_dir}/ALL*chr#{panel_chr}_*hap*", 
-				"-l #{@@panel_dir}/ALL*chr#{panel_chr}_*legend*", 
-				"-chrX -sample_known_haps_g #{@@phased_dir}/chr23.phased.sample",
-				"-known_haps_g #{@@phased_dir}/chr#{chromosome}.phased.haps",
-				"-use_prephased_g",
-				"-o_gz",
-				"-Ne 20000",
-				"-int #{chunk_start} #{chunk_end}",
-				"-buffer 500",
-				"-o imputed/chr#{chromosome}-chunk-#{chunk_start}-#{chunk_end}.impute"].join(" \\\n\t")
-		else
-			panel_chr=chromosome
-			impute_cmd = [
-				"impute2",
-				"-m #{@@genetic_map_dir}/genetic_map_chr#{panel_chr}_combined_b37.txt",
-				"-h #{@@panel_dir}/ALL*chr#{panel_chr}_*hap*", 
-				"-l #{@@panel_dir}/ALL*chr#{panel_chr}_*legend*", 
-				"-known_haps_g #{@@phased_dir}/chr#{chromosome}.phased.haps",
-				"-use_prephased_g",
-				"-o_gz",
-				"-Ne 20000",
-				"-int #{chunk_start} #{chunk_end}",
-				"-buffer 500",
-				"-o imputed/chr#{chromosome}-chunk-#{chunk_start}-#{chunk_end}.impute"].join(" \\\n\t")
+		def initialize(panel_dir = "panel", genetic_map_dir = "panel", phase_dir="phasing")
+			@panel_dir = panel_dir
+			@genetic_map_dir = panel_dir
+			@phased_dir="#{phase_dir}/phased"
+			@unphased_dir="#{phase_dir}/unphased"
 		end
+
+		def map(chr)
+			"#{@genetic_map_dir}/genetic_map_chr#{chr}_combined_b37.txt",
+		end
+
+		def haps(chr)
+			"#{@panel_dir}/ALL*chr#{chr}_*hap*", 
+		end
+
+		def legend(chr)
+			"#{@panel_dir}/ALL*chr#{chr}_*legend*", 
+		end
+
+		def phased_haps
+			"-known_haps_g #{@@phased_dir}/chr#{chromosome}.phased.haps",
+		end
+	end
+
+	class CNF_1000GP_Phase3_b37 < Configuration
+		def haps(chr)
+			"#{@panel_dir}/1000GP_Phase3_b37_chr#{chr}.hap.gz", 
+		end
+
+		def legend(chr)
+			"#{@panel_dir}/1000GP_Phase3_b37_chr#{chr}.legend.gz", 
+		end
+
+
+	end 
+
+	def Chunking::make_script( cnf, chromosome, chunk_start, chunk_end)
+		impute_cmd = [
+			"impute2",
+			"-m #{cnf.map(chromosome)}",
+			"-h #{cnf.haps(chromosome)}",
+			"-l #{cnf.legend(chromosome)}",
+			chromosome==23 ? "-chrX -sample_known_haps_g #{cnf.known_haps(chromosome)}" : "-known_haps_g #{cnf.known_haps(chromosome)}",
+			"-use_prephased_g",
+			"-o_gz",
+			"-Ne 20000",
+			"-int #{chunk_start} #{chunk_end}",
+			"-buffer 500",
+			"-o imputed/chr#{chromosome}-chunk-#{chunk_start}-#{chunk_end}.impute"].join(" \\\n\t")
 
 		script = [
 			"#!/bin/bash",
