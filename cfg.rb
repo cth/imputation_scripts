@@ -5,11 +5,16 @@ $cfg = CNF_1000GP_Phase3_b37.new({
 	# These are the chromosomes to be analyzed 
 	"chromosomes" => (1..22).to_a,
 
+	# input plink file
+	"input_plink" =>  "../b37/strandup"
+
 
 	# Where the imputation panel resides
-	"panel_dir" => "#{`pwd`}/../1000GP_Phase3_b7",
+	"panel_dir" => "#{`pwd`}/../1000GP_Phase3_b37",
 
-	"shapeit" => "../common/software/shapeit",
-	"shapeit_threads" => 16
+	"shapeit_threads" => 16,
+
+	# setup progs
+	"plink" => "../common/software/plink",
+	"shapeit" => "../common/software/shapeit"
 })
-
