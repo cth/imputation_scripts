@@ -1,6 +1,6 @@
 # Settings:
 require 'configuration.rb' 
-require 'include/queue_runner.rb'
+require 'lib/queue_runner.rb'
 
 
 plink="../common/software/plink"

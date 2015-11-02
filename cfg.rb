@@ -1,4 +1,4 @@
-require_relative 'include/configuration.rb'
+require_relative 'lib/configuration.rb'
 
 $cfg = Configuration.new({
 
