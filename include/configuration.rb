@@ -1,7 +1,7 @@
 class Configuration
 	attr_accessor :phased_dir, :unphased_dir, :genetic_map_dir, :panel_dir
 
-	def initialize(hsh = { panel_dir => "panel", genetic_map_dir => "panel", phase_dir => "phasing" })
+	def initialize(hsh = { "panel_dir" => "panel", "genetic_map_dir" => "panel", "phase_dir" => "phasing" })
 		@hsh = hsh
 		@hsh["phased_dir"]="#{@hsh["phase_dir"]}/phased"
 		@hsh["unphased_dir"]="#{@hsh["phase_dir"]}/unphased"
