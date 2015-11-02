@@ -1,37 +1,35 @@
 class Configuration
 	attr_accessor :phased_dir, :unphased_dir, :genetic_map_dir, :panel_dir
 
-	def initialize(panel_dir = "panel", genetic_map_dir = "panel", phase_dir="phasing")
-		@panel_dir = panel_dir
-		@genetic_map_dir = panel_dir
-		@phased_dir="#{phase_dir}/phased"
-		@unphased_dir="#{phase_dir}/unphased"
-		@hsh = {}
+	def initialize(hsh = { panel_dir => "panel", genetic_map_dir => "panel", phase_dir => "phasing" })
+		@hsh = hsh
+		@hsh["phased_dir"]="#{@hsh["phase_dir"]}/phased"
+		@hsh["unphased_dir"]="#{@hsh["phase_dir"]}/unphased"
 	end
 
 	def map(chr)
-		"#{@genetic_map_dir}/genetic_map_chr#{chr}_combined_b37.txt"
+		"#{@hsh["genetic_map_dir"]}/genetic_map_chr#{chr}_combined_b37.txt"
 	end
 
 
 	def haps(chr)
-		"#{@panel_dir}/ALL*chr#{chr}_*hap*"
+		"#{@hsh["panel_dir"]}/ALL*chr#{chr}_*hap*"
 	end
 
 	def legend(chr)
-		"#{@panel_dir}/ALL*chr#{chr}_*legend*"
+		"#{@hsh["panel_dir"]}/ALL*chr#{chr}_*legend*"
 	end
 
 
 	# shapeit file extensions
 	["haps", "sample", "log" ].each do |ext|
 		define_method("phased_#{ext}") do |chr|
-			"#{@phased_dir}/chr#{chr}.phased.#{ext}"
+			"#{@hsh["phased_dir"]}/chr#{chr}.phased.#{ext}"
 		end
 	end
 
 	def unphased_stem(chr)
-		"#{@unphased_dir}/chr#{chr}"
+		"#{@hsh["unphased_dir"]}/chr#{chr}"
 	end
 
 	[ "bed","bim","fam"].each do |ext|
@@ -40,13 +38,11 @@ class Configuration
 		end
 	end
 
-	
-
-	# catch all to  
+	# catch all
 	def method_missing(method_name, *argument, &block) 
 		if method_name.to_s =~ /(.*)=$/ then
 			@hsh[$1] = argument.first 
-		elsif @hsh.include?[method_name] then
+		elsif @hsh.include?(method_name) then
 			@hsh[method_name]
 		else
 			super
