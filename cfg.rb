@@ -1,6 +1,6 @@
 require_relative 'include/configuration.rb'
 
-$cfg = CNF_1000GP_Phase3_b37.new({
+$cfg = Configuration.new({
 
 	# These are the chromosomes to be analyzed 
 	"chromosomes" => (1..22).to_a,

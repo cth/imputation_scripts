@@ -1,10 +1,10 @@
 class Configuration
-	attr_accessor :phased_dir, :unphased_dir, :genetic_map_dir, :panel_dir
 
 	def initialize(hsh = { "panel_dir" => "panel", "genetic_map_dir" => "panel", "phase_dir" => "phasing" })
 		@hsh = hsh
 		@hsh["phased_dir"]="#{@hsh["phase_dir"]}/phased"
 		@hsh["unphased_dir"]="#{@hsh["phase_dir"]}/unphased"
+		puts @hsh.inspect
 	end
 
 	def map(chr)
@@ -12,13 +12,22 @@ class Configuration
 	end
 
 
+###	def haps(chr)
+###		"#{@hsh["panel_dir"]}/ALL*chr#{chr}_*hap*"
+###	end
+###
+###	def legend(chr)
+###		"#{@hsh["panel_dir"]}/ALL*chr#{chr}_*legend*"
+###	end
+
 	def haps(chr)
-		"#{@hsh["panel_dir"]}/ALL*chr#{chr}_*hap*"
+		"#{@hsh["panel_dir"]}/1000GP_Phase3_b37_chr#{chr}.hap.gz"
 	end
 
 	def legend(chr)
-		"#{@hsh["panel_dir"]}/ALL*chr#{chr}_*legend*"
+		"#{@hsh["panel_dir"]}/1000GP_Phase3_b37_chr#{chr}.legend.gz"
 	end
+
 
 
 	# shapeit file extensions
