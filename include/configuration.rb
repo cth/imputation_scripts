@@ -40,10 +40,11 @@ class Configuration
 
 	# catch all
 	def method_missing(method_name, *argument, &block) 
+		puts method_name.inspect
 		if method_name.to_s =~ /(.*)=$/ then
 			@hsh[$1] = argument.first 
 		elsif @hsh.include?(method_name) then
-			@hsh[method_name]
+			@hsh[method_name.to_s]
 		else
 			super
 		end
