@@ -1,42 +1,4 @@
 module Chunking
-	class Configuration
-		attr_accessor :phased_dir, :unphased_dir, :genetic_map_dir, :panel_dir
-
-		def initialize(panel_dir = "panel", genetic_map_dir = "panel", phase_dir="phasing")
-			@panel_dir = panel_dir
-			@genetic_map_dir = panel_dir
-			@phased_dir="#{phase_dir}/phased"
-			@unphased_dir="#{phase_dir}/unphased"
-		end
-
-		def map(chr)
-			"#{@genetic_map_dir}/genetic_map_chr#{chr}_combined_b37.txt",
-		end
-
-		def haps(chr)
-			"#{@panel_dir}/ALL*chr#{chr}_*hap*", 
-		end
-
-		def legend(chr)
-			"#{@panel_dir}/ALL*chr#{chr}_*legend*", 
-		end
-
-		def phased_haps
-			"-known_haps_g #{@@phased_dir}/chr#{chromosome}.phased.haps",
-		end
-	end
-
-	class CNF_1000GP_Phase3_b37 < Configuration
-		def haps(chr)
-			"#{@panel_dir}/1000GP_Phase3_b37_chr#{chr}.hap.gz", 
-		end
-
-		def legend(chr)
-			"#{@panel_dir}/1000GP_Phase3_b37_chr#{chr}.legend.gz", 
-		end
-
-
-	end 
 
 	def Chunking::make_script( cnf, chromosome, chunk_start, chunk_end)
 		impute_cmd = [
@@ -63,9 +25,12 @@ module Chunking
 			impute_cmd
 		].join("\n")
 
-		File.open("sge/impute-chr.#{chromosome}.#{chunk_start}-#{chunk_end}.sge", "w") do |f|
+		script_path = "sge/impute-chr.#{chromosome}.#{chunk_start}-#{chunk_end}.sge"
+		File.open(script_path, "w") do |f|
 			f.write(script)
 		end
+		
+		script_path
 	end
 
 	def Chunking::infer_chunks(chromosome,max_chunk_size=2000000) 
