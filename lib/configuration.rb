@@ -21,11 +21,11 @@ class Configuration
 ###	end
 
 	def haps(chr)
-		"#{@hsh["panel_dir"]}/1000GP_Phase3_b37_chr#{chr}.hap.gz"
+		"#{@hsh["panel_dir"]}/1000GP_Phase3_chr#{chr}.hap.gz"
 	end
 
 	def legend(chr)
-		"#{@hsh["panel_dir"]}/1000GP_Phase3_b37_chr#{chr}.legend.gz"
+		"#{@hsh["panel_dir"]}/1000GP_Phase3_chr#{chr}.legend.gz"
 	end
 
 
