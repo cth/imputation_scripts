@@ -9,6 +9,6 @@ $cfg.chromosomes.each do |chr|
 		file.puts "\#$ -S /bin/bash"
 		file.puts "#{$cfg.plink} --bfile plink/all_hwe10e_maf001_geno005 --chr #{chr} --make-bed --out #{$cfg.unphased_stem(chr)}"
 	end
-	`sbatch -p normal -n1 -c1 sge/chrsplit..sge`
+	`sbatch -p normal -n1 -c1 sge/chrsplit.#{chr}.sge`
 done
 

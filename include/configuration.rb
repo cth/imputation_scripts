@@ -10,16 +10,16 @@ class Configuration
 	end
 
 	def map(chr)
-		"#{@genetic_map_dir}/genetic_map_chr#{chr}_combined_b37.txt",
+		"#{@genetic_map_dir}/genetic_map_chr#{chr}_combined_b37.txt"
 	end
 
 
 	def haps(chr)
-		"#{@panel_dir}/ALL*chr#{chr}_*hap*", 
+		"#{@panel_dir}/ALL*chr#{chr}_*hap*"
 	end
 
 	def legend(chr)
-		"#{@panel_dir}/ALL*chr#{chr}_*legend*", 
+		"#{@panel_dir}/ALL*chr#{chr}_*legend*"
 	end
 
 
@@ -30,12 +30,16 @@ class Configuration
 		end
 	end
 
+	def unphased_stem(chr)
+		"#{@unphased_dir}/chr#{chr}"
+	end
 
-	["bed","bim","fam"].each do |ext|
+	[ "bed","bim","fam"].each do |ext|
 		define_method("unphased_#{ext}") do |chr|
-			"#{@unphased_dir}/chr#{chr}.#{ext}"
+			"#{unphased_stem(chr)}.#{ext}"
 		end
 	end
+
 	
 
 	# catch all to  
@@ -52,13 +56,11 @@ end
 
 class CNF_1000GP_Phase3_b37 < Configuration
 	def haps(chr)
-		"#{@panel_dir}/1000GP_Phase3_b37_chr#{chr}.hap.gz", 
+		"#{@panel_dir}/1000GP_Phase3_b37_chr#{chr}.hap.gz"
 	end
 
 	def legend(chr)
-		"#{@panel_dir}/1000GP_Phase3_b37_chr#{chr}.legend.gz", 
+		"#{@panel_dir}/1000GP_Phase3_b37_chr#{chr}.legend.gz"
 	end
-
-
 end 
 
