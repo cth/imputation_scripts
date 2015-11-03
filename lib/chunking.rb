@@ -3,9 +3,7 @@ require_relative 'utils.rb'
 module Chunking
 
 	def Chunking::make_script( chromosome, chunk_start, chunk_end)
-		impute_cmd = [
-			"#{$cfg.impute2}",
-			"-m #{cf($cfg.map(chromosome))}"] +
+		impute_cmd = ([ "#{$cfg.impute2}", "-m #{cf($cfg.map(chromosome))}"] +
 			$cfg.haps(chromosome).collect { |h| " -h #{cf(h)}" } +  
 			$cfg.legends(chromosome).collect { |l| " -l #{cf(l)}" } +  
 			[
@@ -15,7 +13,7 @@ module Chunking
 			"-Ne 20000",
 			"-int #{chunk_start} #{chunk_end}",
 			"-buffer 500",
-			"-o imputed/chr#{chromosome}-chunk-#{chunk_start}-#{chunk_end}.impute"].join(" \\\n\t")
+			"-o imputed/chr#{chromosome}-chunk-#{chunk_start}-#{chunk_end}.impute"]).join(" \\\n\t")
 
 		script = [
 			"#!/bin/bash",
