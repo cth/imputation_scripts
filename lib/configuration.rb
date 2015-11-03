@@ -1,34 +1,27 @@
-class Configuration
 
-	def initialize(hsh = { "panel_dir" => "panel", "genetic_map_dir" => "panel", "phase_dir" => "phasing" })
+class Configuration
+	def initialize(hsh = {
+			"panels" => [ { 
+				:haps => proc { |chr| "1000GP_Phase3_b37/1000GP_Phase3_chr#{chr}.hap.gz" }, 
+				:legends => proc { |chr| "1000GP_Phase3_b37/1000GP_Phase3_chr#{chr}.legend.gz" }
+			}], 
+			"maps" => proc { |chr| "1000GP_Phase3_b37/genetic_map_chr#{chr}_combined_b37.txt" },
+			"phase_dir" => "phasing" })
 		@hsh = hsh
 		@hsh["phased_dir"]="#{@hsh["phase_dir"]}/phased"
 		@hsh["unphased_dir"]="#{@hsh["phase_dir"]}/unphased"
-		puts @hsh.inspect
+
 	end
 
 	def map(chr)
-		"#{@hsh["genetic_map_dir"]}/genetic_map_chr#{chr}_combined_b37.txt"
+		@hsh["maps"].call(chr)
 	end
 
-
-###	def haps(chr)
-###		"#{@hsh["panel_dir"]}/ALL*chr#{chr}_*hap*"
-###	end
-###
-###	def legend(chr)
-###		"#{@hsh["panel_dir"]}/ALL*chr#{chr}_*legend*"
-###	end
-
-	def haps(chr)
-		"#{@hsh["panel_dir"]}/1000GP_Phase3_chr#{chr}.hap.gz"
+	[:haps, :legends].each do |type|
+		define_method(type.to_s) do |chr|
+			@hsh["panels"].collect { |pnl| panel[type].call(chr) }
+		end
 	end
-
-	def legend(chr)
-		"#{@hsh["panel_dir"]}/1000GP_Phase3_chr#{chr}.legend.gz"
-	end
-
-
 
 	# shapeit file extensions
 	["haps", "sample", "log" ].each do |ext|
@@ -62,14 +55,4 @@ class Configuration
 		end
 	end
 end
-
-class CNF_1000GP_Phase3_b37 < Configuration
-	def haps(chr)
-		"#{@panel_dir}/1000GP_Phase3_b37_chr#{chr}.hap.gz"
-	end
-
-	def legend(chr)
-		"#{@panel_dir}/1000GP_Phase3_b37_chr#{chr}.legend.gz"
-	end
-end 
 

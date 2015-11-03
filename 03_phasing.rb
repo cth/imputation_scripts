@@ -8,9 +8,7 @@ $cfg.chromosomes.each do |chr|
 		file.puts "\#$ -N x.phase$chr" 
 		file.puts "\#$ -cwd"
 		file.puts "\#$ -pe smp #{$cfg.shapeit_threads}"
-
 		extra_opts = chr==23 ? "--chrX" : ""
-
 		file.puts "#{shapeit} --input-bed #{$cfg.unphased_bed} #{$cfg.unphased_bim} #{$cfg.unphased_fam} --input-map #{$cfg.map(chr)} -O #{$cfg.phased_haps(chr)} #{$cfg.phased_sample(chr)} --thread #{$cfg.shapeit_threads} -L #{cfg.phased_log(chr)} #{extra_opts}"
 		chmod +x $script
 		`chmod + #{script}`	
