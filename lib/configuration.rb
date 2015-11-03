@@ -19,7 +19,7 @@ class Configuration
 
 	[:haps, :legends].each do |type|
 		define_method(type.to_s) do |chr|
-			@hsh["panels"].collect { |pnl| panel[type].call(chr) }
+			@hsh["panels"].collect { |pnl| pnl[type].call(chr) }
 		end
 	end
 
