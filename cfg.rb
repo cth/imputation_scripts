@@ -8,7 +8,7 @@ $cfg = Configuration.new({
 	"input_plink" => "../b37/strandup",
 
 	# where the phasing resides
-	"phase_dir" => phasing,
+	"phase_dir" => "phasing",
 
 
 	# Where the imputation panel resides
@@ -33,7 +33,7 @@ $cfg = Configuration.new({
 	"shapeit_threads" => 16,
 
 
-	"impute2" => "../../common/software/impute_v2.3.2_x86_64_static/impute2",
+	"impute2" => "../common/software/impute_v2.3.2_x86_64_static/impute2",
 	"impute2_memory" => "4G",
 	
 	"impute2_chunksize" => 2000000
