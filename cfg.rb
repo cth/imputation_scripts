@@ -23,5 +23,6 @@ $cfg = Configuration.new({
 
 	# setup progs
 	"plink" => "../common/software/plink",
-	"shapeit" => "../common/software/shapeit"
+	"shapeit" => "../common/software/shapeit",
+	"impute2" => "../../common/software/impute_v2.3.2_x86_64_static/impute2"
 })
