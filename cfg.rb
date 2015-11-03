@@ -14,12 +14,12 @@ $cfg = Configuration.new({
 	# Where the imputation panel resides
 	"panels" => [
 		{ 	
-			:haps => proc { |chr| " ../1000GP_Phase3_b37/1000GP_Phase3_chr#{chr}.hap.gz" },
-			:legends => proc { |chr| " ../1000GP_Phase3_b37/1000GP_Phase3_chr#{chr}.legend.gz" }
+			:haps => proc { |chr| "../1000GP_Phase3_b37/1000GP_Phase3_chr#{chr}.hap.gz" },
+			:legends => proc { |chr| "../1000GP_Phase3_b37/1000GP_Phase3_chr#{chr}.legend.gz" }
 		},
 		{ 
-			:haps => proc { |chr| " ../1000GP_Phase3_b37/1000GP_Phase3_chr#{chr}.hap.gz" },
-			:legends => proc { |chr| " ../1000GP_Phase3_b37/1000GP_Phase3_chr#{chr}.legend.gz" }
+			:haps => proc { |chr| "../1000GP_Phase3_b37/1000GP_Phase3_chr#{chr}.hap.gz" },
+			:legends => proc { |chr| "../1000GP_Phase3_b37/1000GP_Phase3_chr#{chr}.legend.gz" }
 		}
 	],
 
