@@ -1,7 +1,8 @@
 # Check whether files exists and are non-empty!
 def cf(file)
-	throw "file #{file} does not exist!" unless File.exists?(file) 
-	throw "File #{file} size is zero!" unless File.new(file).size > 0
+	puts file.inspect
+	throw "file '#{file}' does not exist!" unless File.exists?(file) 
+	throw "File '#{file}' size is zero!" unless File.new(file).size > 0
 	file
 end
 
