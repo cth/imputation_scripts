@@ -4,7 +4,7 @@ module Chunking
 
 	def Chunking::make_script( chromosome, chunk_start, chunk_end)
 		impute_cmd = [
-			"impute2",
+			"#{$cfg.impute2}",
 			"-m #{cf($cfg.map(chromosome))}",
 			"-h #{cf($cfg.haps(chromosome))}",
 			"-l #{cf($cfg.legend(chromosome))}",
