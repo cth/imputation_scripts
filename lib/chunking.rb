@@ -5,9 +5,10 @@ module Chunking
 	def Chunking::make_script( chromosome, chunk_start, chunk_end)
 		impute_cmd = [
 			"#{$cfg.impute2}",
-			"-m #{cf($cfg.map(chromosome))}",
-			"-h #{cf($cfg.haps(chromosome))}",
-			"-l #{cf($cfg.legend(chromosome))}",
+			"-m #{cf($cfg.map(chromosome))}"] +
+			$cfg.haps(chromosome).collect { |h| " -h #{cf(h)}" } +  
+			$cfg.legends(chromosome).collect { |l| " -l #{cf(l)}" } +  
+			[
 			chromosome==23 ? "-chrX -sample_known_haps_g #{cf($cfg.known_haps(chromosome))}" : "-known_haps_g #{cf($cfg.known_haps(chromosome))}",
 			"-use_prephased_g",
 			"-o_gz",
@@ -21,8 +22,8 @@ module Chunking
 			"#\$ -S /bin/bash",
 			"#\$ -N x.imp#{chromosome}-#{chunk_start}",
 			"#\$ -cwd",
-			"#\$ -l h_vmem=4G",
-			"#\$ -l mem_free=4G",
+			"#\$ -l h_vmem=#{$cfg.impute2_memory}",
+			"#\$ -l mem_free=#{$cfg.impute2_memory}",
 			"#\$ -pe smp 1",
 			impute_cmd
 		].join("\n")

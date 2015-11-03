@@ -1,28 +1,40 @@
 require_relative 'lib/configuration.rb'
 
 $cfg = Configuration.new({
-
 	# These are the chromosomes to be analyzed 
 	"chromosomes" => (1..22).to_a,
 
 	# input plink file
-	"input_plink" =>  "../b37/strandup",
+	"input_plink" => "../b37/strandup",
 
 	# where the phasing resides
-	"phase_dir" => "phasing",
+	"phase_dir" => phasing,
 
 
 	# Where the imputation panel resides
-	"panel_dir" => "../1000GP_Phase3_b37",
+	"panels" => [
+		{ 	
+			:haps => proc { |chr| " ../1000GP_Phase3_b37/1000GP_Phase3_chr#{chr}.hap.gz" },
+			:legends => proc { |chr| " ../1000GP_Phase3_b37/1000GP_Phase3_chr#{chr}.legend.gz" }
+		},
+		{ 
+			:haps => proc { |chr| " ../1000GP_Phase3_b37/1000GP_Phase3_chr#{chr}.hap.gz" },
+			:legends => proc { |chr| " ../1000GP_Phase3_b37/1000GP_Phase3_chr#{chr}.legend.gz" }
+		}
+	],
 
-	# Where the imputation panel resides (map files)
-	"genetic_map_dir" => "../1000GP_Phase3_b37",
+	"maps" => proc { |chr| "../1000GP_Phase3_b37/genetic_map_chr#{chr}_combined_b37.txt" },
 
-
-	"shapeit_threads" => 16,
 
 	# setup progs
 	"plink" => "../common/software/plink",
+
 	"shapeit" => "../common/software/shapeit",
-	"impute2" => "../../common/software/impute_v2.3.2_x86_64_static/impute2"
+	"shapeit_threads" => 16,
+
+
+	"impute2" => "../../common/software/impute_v2.3.2_x86_64_static/impute2",
+	"impute2_memory" => "4G",
+	
+	"impute2_chunksize" => 2000000
 })
