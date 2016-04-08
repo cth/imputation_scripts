@@ -1,9 +1,6 @@
 # Settings:
-require 'configuration.rb' 
-require 'lib/queue_runner.rb'
-
-
-plink="../common/software/plink"
+require_relative 'cfg.rb'
+require_relative 'lib/utils.rb'
 
 # make folders:
 `mkdir -p plink`
@@ -13,11 +10,18 @@ plink="../common/software/plink"
 `mkdir -p imputed`
 `mkdir -p VCFs` 
 
+
+qc_opts=({ :maf => $cfg.QC_maf, :mind => $cfg.QC_mind, :geno => $cfg.QC_geno, :hwe => $cfg.QC_hwe })
+
 # QC pruning 
-script="sge/hweprune.sge"
-File.open("sge/hweprune.sge", "w") do |f|
+script="sge/plinkqc.sge"
+
+File.open(script, "w") do |f|
 	f.puts "#!/bin/bash" 
-	f.puts "#{plink} --bfile ../b37/strandup --allow-extra-chr --maf 0.01 --mind 0.05 --geno 0.05 --hwe 0.000001 --make-bed --out plink/all_hwe10e_maf001_geno005"
+	f.puts "#\$ -S /bin/bash"
+	f.puts "#\$ -cwd"
+	f.puts "#{$cfg.plink} --bfile #{$cfg.input_plink} --allow-extra-chr #{hash_param_longopt(qc_opts)} --make-bed --out plink/qc-#{hash_param_str(qc_opts)}"
 end
 
-`sbatch -p normal -n1 -c1 $script`
+`qsub #{script}`
+#`sbatch -p normal -n1 -c1 $script`
