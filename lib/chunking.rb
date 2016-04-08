@@ -1,6 +1,10 @@
 require_relative 'utils.rb'
 
 module Chunking
+	
+	def Chunking::chunk_output_file( chromosome, chunk_start, chunk_end) 
+		"imputed/chr#{chromosome}-chunk-#{chunk_start}-#{chunk_end}.impute"
+	end
 
 	def Chunking::make_script( chromosome, chunk_start, chunk_end)
 		impute_cmd = [ "#{$cfg.impute2}", "-m #{cf($cfg.map(chromosome))}",
@@ -12,7 +16,7 @@ module Chunking
 			"-Ne 20000",
 			"-int #{chunk_start} #{chunk_end}",
 			"-buffer 500",
-			"-o imputed/chr#{chromosome}-chunk-#{chunk_start}-#{chunk_end}.impute"].join(" \\\n\t")
+			"-o #{chunk_output_file(chromosome,chunk_start, chunk_end)}"].join(" \\\n\t")
 
 		script = [
 			"#!/bin/bash",
@@ -21,7 +25,7 @@ module Chunking
 			"#\$ -cwd",
 			"#\$ -l h_vmem=#{$cfg.impute2_memory}",
 			"#\$ -l mem_free=#{$cfg.impute2_memory}",
-			"#\$ -pe smp 1",
+			#"#\$ -pe smp 1",
 			impute_cmd
 		].join("\n")
 
@@ -35,7 +39,7 @@ module Chunking
 
 	def Chunking::infer_chunks(chromosome,max_chunk_size=2000000) 
 		positions=[]
-		puts "making chunks from #{ $cfg.unphased_bim(chromosome) }" 
+		#puts "making chunks from #{ $cfg.unphased_bim(chromosome) }" 
 		DF.new(cf($cfg.unphased_bim(chromosome))).each { |_,_,_,pos,_,_| positions << pos.to_i }
 		positions.sort!
 		index = positions.first.to_i
@@ -43,7 +47,7 @@ module Chunking
 		loop do 
 			next_index=index+max_chunk_size
 			break if next_index > positions.last.to_i
-			puts "\t" + [ index, next_index ].inspect
+			#puts "\t" + [ index, next_index ].inspect
 			chunks << [ chromosome, index, next_index ]
 			index = next_index
 		end 

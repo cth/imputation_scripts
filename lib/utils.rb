@@ -1,3 +1,13 @@
+
+
+def hash_param_longopt(hsh)
+	hsh.keys.sort.collect { |key| "--" + key.to_s + " " + ("%.2E" % hsh[key]) }.join(" ")
+end
+
+def hash_param_str(hsh)
+	hsh.keys.sort.collect { |key| key.to_s + "-" + ("%.2E" % hsh[key]) }.join(".")
+end
+
 # Check whether files exists and are non-empty!
 def cf(file)
 	puts file.inspect
