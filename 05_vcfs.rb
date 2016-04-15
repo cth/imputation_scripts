@@ -10,11 +10,11 @@ $cfg.chromosomes.each do |chr|
 		chunkbase="chr#{chr}-chunk-#{from}-#{to}"
                 genofile=pwd + "/imputed/#{chunkbase}.impute.gz"
                 infofile=pwd + "/imputed/#{chunkbase}.impute_info"
-		samplefile= pwd + "/phasing/chr1.fam"
+		samplefile= pwd + "/phasing/unphased/chr1.fam"
                 vcf= pwd + "/VCFs/#{chunkbase}.vcf"
                 vcfgz=vcf + ".gz"
-
-		File.open("sge/impute-to-vcf-#{chr}-#{from}-#{to}.sge", "w") do |file|
+		script="sge/impute-to-vcf-#{chr}-#{from}-#{to}.sge"
+		File.open(script, "w") do |file|
 			file.puts "#!/bin/bash"
 			file.puts "\#$ -S /bin/bash" 
 			file.puts "\#$ -N x.vcf" 
@@ -23,6 +23,7 @@ $cfg.chromosomes.each do |chr|
                 	file.puts "#{$cfg.bgzip} #{vcf}"
                		file.puts "#{$cfg.tabix} -p vcf #{vcfgz}"
 		end
+		`qsub #{script}`
 		#`sbatch -p normal -n1 -c1 --mem=#{$cfg.impute2_memory} #{script}`
 	end
 end
