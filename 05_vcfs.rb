@@ -7,7 +7,7 @@ $cfg.chromosomes.each do |chr|
 	Chunking::infer_chunks(chr, $cfg.impute2_chunksize).each do |chr,from,to| 
 		puts "#{chr} #{from} #{to}"
 		pwd=`pwd`.chomp
-		chunkbase="chr#{chr}-chunk-#{from}-#{to}"
+		chunkbase=Chunking::chunkbase(chr,from,to)
                 genofile=pwd + "/imputed/#{chunkbase}.impute.gz"
                 infofile=pwd + "/imputed/#{chunkbase}.impute_info"
 		samplefile= pwd + "/phasing/unphased/chr1.fam"

@@ -6,6 +6,10 @@ module Chunking
 		"imputed/chr#{chromosome}-chunk-#{chunk_start}-#{chunk_end}.impute"
 	end
 
+	def Chunking::chunkbase( chr, from, to )
+		"chr#{chr}-chunk-#{from}-#{to}"
+	end
+
 	def Chunking::make_script( chromosome, chunk_start, chunk_end)
 		impute_cmd = [ "#{$cfg.impute2}", "-m #{cf($cfg.map(chromosome))}",
 			"-h #{$cfg.haps(chromosome).join(' ')}",

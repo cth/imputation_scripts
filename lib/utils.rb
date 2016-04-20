@@ -17,6 +17,18 @@ def cf(file)
 end
 
 
+
+def filter_by_info(info)
+	ARGF.each do |line|
+		if line =~ /^#/ then
+			puts line
+		elsif line[1..150] =~ /INFO=([\.0-9]+)/ then
+			puts line if $1.to_f > info 
+		end
+	end
+end
+
+
 # A simplistic sequential data file reader with some data.frame like capabilities,
 # but without having to load the whole thing into memory
 # Christian Theil Have

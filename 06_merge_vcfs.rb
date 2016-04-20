@@ -17,7 +17,7 @@ $cfg.chromosomes.each do |chr|
 
 	Chunking::infer_chunks(chr, $cfg.impute2_chunksize).each do |_,from,to| 
 		pwd=`pwd`.chomp
-		chunkbase="chr#{chr}-chunk-#{from}-#{to}"
+		chunkbase=Chunking::chunkbase(chr,from,to)
 		vcf= pwd + "/VCFs/#{chunkbase}.vcf"
                 vcfgz=vcf + ".gz"
 
