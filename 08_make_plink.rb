@@ -13,13 +13,15 @@ File.open(merge_list_file,"w") do |file|
 		script.puts("\#$ -S /bin/bash")
 		script.puts("\#$ -N x.plink#{chr}")
 		script.puts("\#$ -cwd")
-		script.puts("#{cfg.plink} --vcf #{input_file} --make-bed --out #{output_file}")
+		script.puts("#{$cfg.plink} --vcf #{input_file} --make-bed --out #{output_file}")
 		script.close
 		qsubout=`qsub #{script_name}`
 		jobs<<$1 if qsubout =~ /Your job ([0-9]+)/ 
-		file<<output_file
+		file<<"#{output_file}\n"
 	end
 end
+
+exit
 
 script_name = "sge/merge-imputed-plink.sge"
 script = File.open(script_name,"w")
