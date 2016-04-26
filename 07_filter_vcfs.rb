@@ -11,7 +11,6 @@ $cfg.chromosomes.each do |chr|
 	script.puts("\#$ -N x.filt#{chr}")
 	script.puts("\#$ -cwd")
 	script.puts "zcat #{input_file}|ruby -e \"require './lib/utils.rb'; filter_by_info(#{$cfg.minimum_info})\" > #{output_file}"
-	script.puts("rm -f #{output_file}")
 	script.puts "#{$cfg.bgzip} #{output_file}"
 	script.puts "#{$cfg.tabix} -p vcf #{output_file}.gz"	
 	script.close
