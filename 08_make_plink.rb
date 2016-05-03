@@ -1,13 +1,13 @@
 require_relative 'cfg.rb'
 
-`mkdir -p filtered_VCFs`
+`mkdir -p imputed_plink`
 
 jobs=[]
 merge_list_file="plink/list_imputed_plink_files.txt"
 File.open(merge_list_file,"w") do |file|
 	$cfg.chromosomes.each do |chr| 
 		input_file="filtered_VCFs/chr#{chr}.vcf.gz"
-		output_file="plink/imputed-#{chr}"
+		output_file="imputed_plink/imputed-#{chr}"
 		script_name = "sge/vcf-to-plink-#{chr}.sge"
 		script = File.open(script_name,"w")
 		script.puts("\#$ -S /bin/bash")
@@ -28,7 +28,7 @@ script = File.open(script_name,"w")
 script.puts("\#$ -S /bin/bash")
 script.puts("\#$ -N x.mrgplnk")
 script.puts("\#$ -cwd")
-script.puts("#{$cfg.plink} --merge-list #{merge_list_file} --out plink/imputed-all-chromosomes")
+script.puts("#{$cfg.plink} --merge-list #{merge_list_file} --out imputed_plink/imputed-all-chromosomes")
 script.close
 
 `qsub -hold_jid #{jobs.join(",")} #{script_name}`
