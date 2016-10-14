@@ -21,7 +21,15 @@ $cfg.chromosomes.each do |chr|
 		vcf= pwd + "/VCFs/#{chunkbase}.vcf"
                 vcfgz=vcf + ".gz"
 
-		next unless File.exists?(vcfgz)
+		if File.exists?(vcf) and File.size(vcf) > 0
+			tool="cat"
+			target=vcf
+		elsif File.exists?(vcfgz) and File.size(vcfgz) > 0
+			tool="zcat"
+			target=gzvcf
+		else
+			next
+		end
 
 		if line == 1 then 
 			skip_header=" "
@@ -29,13 +37,13 @@ $cfg.chromosomes.each do |chr|
 			skip_header="|grep -v \"^#\""
 		end
 
-		script.puts "zcat  #{vcfgz} #{skip_header} >> #{output_file}"
+		script.puts "#{tool} #{target} #{skip_header} >> #{output_file}"
 		line = line + 1
 	end
 
 	script.puts "bgzip #{output_file}"
 	script.puts "tabix -p vcf #{output_file}.gz"	
 	script.close
-	`qsub #{script_name}`
+	#`qsub #{script_name}`
 end
 
