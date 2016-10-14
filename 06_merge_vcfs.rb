@@ -44,6 +44,6 @@ $cfg.chromosomes.each do |chr|
 	script.puts "bgzip #{output_file}"
 	script.puts "tabix -p vcf #{output_file}.gz"	
 	script.close
-	#`qsub #{script_name}`
+	`qsub #{script_name}`
 end
 
