@@ -14,7 +14,7 @@ module Chunking
 		impute_cmd = [ "#{$cfg.impute2}", "-m #{cf($cfg.map(chromosome))}",
 			"-h #{$cfg.haps(chromosome).join(' ')}",
 			"-l #{$cfg.legends(chromosome).join(' ')}",
-			chromosome==23 ? "-chrX -sample_known_haps_g #{cf($cfg.known_haps(chromosome))}" : "-known_haps_g #{cf($cfg.known_haps(chromosome))}",
+			chromosome==23 ? "-chrX -sample_g #{cf($cfg.phased_sample(chromosome))} -known_haps_g #{cf($cfg.known_haps(chromosome))}" : "-known_haps_g #{cf($cfg.known_haps(chromosome))}",
 			"-use_prephased_g",
 			"-o_gz",
 			"-Ne 20000",
